@@ -119,3 +119,34 @@ The anchor stage generates one clip and keeps its sharpest frame as the identity
 soundtrack as the voice reference. The clips stage conditions every generation on both via Ref2VA, so
 appearance and voice stay fixed while scene, framing and dialogue vary. The review stage drops clips
 that are too dark, near-static or silent, and writes what it rejected to `rejected.json`.
+
+## Building a control dataset (pose, and the same shape for depth or edges)
+
+A structural IC-LoRA needs *pairs*: the footage, and a rendering of the control signal aligned with it
+frame for frame. `scripts/extract_pose.py` produces both from ordinary video, and writes the manifest
+that links them:
+
+```bash
+python scripts/extract_pose.py raw/ data/pose --resolution-bucket 448x768x124 --min-full-body 0.7
+python scripts/split_manifest.py data/pose/dataset.json --holdout 4
+python scripts/process_dataset.py data/pose/dataset_train.json \
+    --resolution-bucket 448x768x124 --variant ref2va --references \
+    --model-path $H3 --decode 2
+```
+
+Three things decide whether this works, and none of them are in the trainer:
+
+* **Alignment.** The skeleton is rendered from the same normalized frames as the target, in the same
+  pass, so the two cannot drift. Rendering control videos separately — a different fps assumption, a
+  different frame count — teaches the adapter a constant lag.
+* **Framing.** The extractor rejects a clip unless a full body is visible for `--min-full-body` of its
+  length. A portrait bucket matters for the same reason: a square crop of full-body footage removes
+  the ankles, and an adapter that has never seen feet cannot place them.
+* **A real held-out set.** `split_manifest.py` reserves clips that are never encoded, so a generation
+  from one of their skeletons cannot be explained by memorization. The trainer's own
+  `val_split_every` split is only ever seen as loss, which is a weaker claim.
+
+Rejections are worth reading rather than ignoring: on scraped dance footage roughly 40% of clips
+survive the full-body filter, mostly because the framing is a torso close-up. Swap the renderer for
+depth or edge maps and everything downstream is unchanged — the manifest column is still
+`reference_video`.
