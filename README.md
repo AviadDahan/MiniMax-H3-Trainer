@@ -39,7 +39,35 @@ python scripts/generate.py --prompt "..." --lora runs/.../checkpoint-0000600 --a
 ## Demo
 
 <!-- DEMO:START -->
-*Filled in from the finished character run. Live results meanwhile: `artifacts/character-run/eval_*/`.*
+A character AV LoRA trained with this repo: **36 clips, rank 16, 1200 steps, ~6 h on 4×A6000**. The
+character is synthetic — invented from a text description, generated with H3 itself, so no real
+person's likeness or voice is involved ([how](docs/dataset-preparation.md#generating-a-character-dataset)).
+
+**Identity holds across scenes.** Anchor on the left; two generations from the finished adapter in
+unrelated settings, same seed family, neither scene in the training set:
+
+![anchor beside two generations](docs/demo/character_identity.png)
+
+**The trigger does the work.** Same seed, same prompt, adapter off (top) and on (bottom). The base
+model reads the prompt as a landscape; with the adapter the trigger `OHWXMIRA` resolves to the
+character:
+
+![base versus adapter on a canal prompt](docs/demo/character_ab_canal.png)
+
+**And it stays contained.** A prompt with no trigger is essentially untouched — this is the check for
+prompt-adherence collapse, the usual way a character LoRA quietly ruins a model:
+
+![base versus adapter on a control prompt](docs/demo/character_control.png)
+
+Held-out video loss: 0.454 → 0.2675 (150) → 0.2415 (450) → 0.2430 (800) → **0.2356 (1200)**. Note the
+run looked converged from 450 to 800 and then improved again — one reason `plot_metrics.py` reports a
+sigma-controlled trend rather than a raw curve.
+
+**What this does not show.** Voice identity is unverified: the clips carry speech and the audio branch
+trains, but "does it sound like the same person" was never measured, only that speech is present and
+in the expected band. The adapter also learns the anchor's wardrobe along with the face, which is what
+36 clips of one outfit buys you. And nothing here is evidence about *real* footage — the whole dataset
+came out of H3, which is a clean test of the trainer and an easier problem than the real thing.
 <!-- DEMO:END -->
 
 ---
@@ -240,7 +268,7 @@ What has actually been measured on this hardware, not claims:
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
 | IC-LoRA packing | a reference image contributes 4,096 rows to an 8,741-row sequence; loss over the 448 target rows only |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
-| Character LoRA | trigger flips output to the learned concept while a control prompt is unchanged; see [Demo](#demo) |
+| Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#demo) |
 | Unit tests | 46 passing |
 
 ---

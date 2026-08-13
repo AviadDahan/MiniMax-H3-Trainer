@@ -163,12 +163,22 @@ def main() -> int:
 
 
 def _gather(records: list, rank: int, world_size: int) -> list:
+    """Collect every rank's records on every rank.
+
+    Over **gloo**, deliberately. The payload is a list of small JSON-able dicts,
+    and `all_gather_object` serializes through the *current* CUDA device -- which
+    no rank here has set, since each one places its models explicitly by index.
+    Under NCCL every rank would therefore gather on `cuda:0`, which NCCL rejects
+    with a bare "invalid usage" after the expensive part of the job has already
+    succeeded. Nothing else in this script is collective, so a CPU backend costs
+    nothing.
+    """
     if world_size <= 1:
         return records
     import torch.distributed as dist
 
     if not dist.is_initialized():
-        dist.init_process_group("nccl")
+        dist.init_process_group("gloo")
     gathered: list = [None] * world_size
     dist.all_gather_object(gathered, records)
     dist.barrier()
