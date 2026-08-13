@@ -33,16 +33,16 @@
 # frame-aligned with their source clips and rejects anything not showing a full
 # body. Preprocess with the reference column wired up:
 #
-#   python scripts/extract_pose.py raw/ /data/aviad/datasets/pose_iclora \
+#   python scripts/extract_pose.py raw/ ${H3_DATASETS}/pose_iclora \
 #       --resolution-bucket 448x768x124
-#   python scripts/split_manifest.py /data/aviad/datasets/pose_iclora/dataset.json --holdout 4
-#   python scripts/process_dataset.py /data/aviad/datasets/pose_iclora/dataset_train.json \
+#   python scripts/split_manifest.py ${H3_DATASETS}/pose_iclora/dataset.json --holdout 4
+#   python scripts/process_dataset.py ${H3_DATASETS}/pose_iclora/dataset_train.json \
 #       --resolution-bucket 320x576x124 --variant ref2va --references
 #   python scripts/train.py configs/pose_ic_lora.yaml
 # =============================================================================
 
 model:
-  model_path: /data/aviad/models/MiniMax-H3
+  model_path: ${H3_MODEL_PATH}
   variant: ref2va
   training_mode: lora
   load_checkpoint: null
@@ -94,7 +94,7 @@ acceleration:
   quantization: none
   offload_optimizer_during_validation: false
 data:
-  preprocessed_data_root: /data/aviad/datasets/pose_iclora/.precomputed320
+  preprocessed_data_root: ${H3_DATASETS}/pose_iclora/.precomputed320
   num_dataloader_workers: 2
   val_split_every: 10
   shuffle: true
@@ -143,4 +143,4 @@ wandb:
   - pose
   log_validation_videos: true
 seed: 42
-output_dir: /data/aviad/runs/pose_ic_lora
+output_dir: ${H3_RUNS}/pose_ic_lora

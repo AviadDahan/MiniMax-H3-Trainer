@@ -9,10 +9,15 @@ shifts, and the sequence-length budget.
 
 ``extra="forbid"`` everywhere: a typo'd key should fail at load, not be silently
 ignored for six hours of training.
+
+Every path accepts ``$VAR`` / ``${VAR}`` and ``~``, expanded at load. The shipped
+configs use ``${H3_MODEL_PATH}`` and ``${H3_RUNS}`` (both set by
+``scripts/env.sh``) so that a clone runs without editing one file per machine.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -35,6 +40,18 @@ from h3_trainer.constants import (
 DEFAULT_LORA_TARGET_MODULES = ["to_q", "to_k", "to_v", "to_out.0"]
 #: Adding the SwiGLU feed-forward roughly triples adapter capacity.
 FFN_LORA_TARGET_MODULES = ["to_q", "to_k", "to_v", "to_out.0", "ff.net.0.proj", "ff.net.2"]
+
+
+def expand_path(value: Any) -> Any:
+    """Expand ``$VAR``/``${VAR}`` and ``~`` in anything that looks like a path.
+
+    An unset variable is left as the literal ``${NAME}``, which then fails the
+    existence check with the name still visible -- far easier to act on than a
+    path silently resolving to the empty string.
+    """
+    if isinstance(value, (str, Path)):
+        return Path(os.path.expanduser(os.path.expandvars(str(value))))
+    return value
 
 
 class ConfigBaseModel(BaseModel):
@@ -181,6 +198,11 @@ class ModelConfig(ConfigBaseModel):
         description="Checkpoint file, or a directory from which the latest checkpoint is taken.",
     )
 
+    @field_validator("model_path", "load_checkpoint", mode="before")
+    @classmethod
+    def _expand(cls, value: Any) -> Any:
+        return expand_path(value) if value is not None else value
+
     @field_validator("model_path")
     @classmethod
     def _must_exist(cls, value: Path) -> Path:
@@ -283,6 +305,11 @@ class AccelerationConfig(ConfigBaseModel):
         default=None,
         description="Explicit DeepSpeed JSON. When omitted a config is generated from this section.",
     )
+
+    @field_validator("deepspeed_config", mode="before")
+    @classmethod
+    def _expand_deepspeed(cls, value: Any) -> Any:
+        return expand_path(value) if value is not None else value
     mixed_precision_mode: Literal["no", "fp16", "bf16"] = "bf16"
     quantization: Literal["none", "int8-quanto", "fp8-quanto", "nf4-bnb", "int8-bnb"] = Field(
         default="none",
@@ -306,6 +333,11 @@ class DataConfig(ConfigBaseModel):
     preprocessed_data_root: Path = Field(
         ..., description="The .precomputed directory written by scripts/process_dataset.py."
     )
+
+    @field_validator("preprocessed_data_root", mode="before")
+    @classmethod
+    def _expand(cls, value: Any) -> Any:
+        return expand_path(value)
     num_dataloader_workers: int = Field(default=2, ge=0)
     val_split_every: int = Field(
         default=20,
@@ -444,6 +476,11 @@ class H3TrainerConfig(ConfigBaseModel):
     wandb: WandbConfig = Field(default_factory=WandbConfig)
     seed: int = 42
     output_dir: Path = Path("outputs/h3_lora")
+
+    @field_validator("output_dir", mode="before")
+    @classmethod
+    def _expand_output(cls, value: Any) -> Any:
+        return expand_path(value)
 
     @model_validator(mode="after")
     def _cross_section_checks(self) -> H3TrainerConfig:

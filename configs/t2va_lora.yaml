@@ -8,7 +8,7 @@
 #
 # Preprocess first:
 #   python scripts/process_dataset.py dataset.json \
-#       --model-path /data/aviad/models/MiniMax-H3 --resolution-bucket 704x704x107
+#       --model-path ${H3_MODEL_PATH} --resolution-bucket 704x704x107
 #
 # Run (8 GPUs, bf16 weights sharded with ZeRO-3):
 #   deepspeed --num_gpus 8 scripts/train.py configs/t2va_lora.yaml
@@ -19,7 +19,7 @@
 
 model:
   # Local diffusers-layout MiniMax-H3 directory (scripts/download_model.sh).
-  model_path: /data/aviad/models/MiniMax-H3
+  model_path: ${H3_MODEL_PATH}
   # fl2va -> subfolder "transformer": text, first-frame and first+last-frame tasks.
   # ref2va -> subfolder "transformer_ref": omni-reference (see ref2va_ic_lora.yaml).
   variant: fl2va
@@ -79,7 +79,7 @@ acceleration:
   offload_optimizer_during_validation: false
 
 data:
-  preprocessed_data_root: /data/aviad/datasets/character/.precomputed
+  preprocessed_data_root: ${H3_DATASETS}/character/.precomputed
   num_dataloader_workers: 2
   # md5(id) % 20 == 0 -> validation (~5%). Hash-based so the split survives
   # adding or reordering samples.
@@ -136,4 +136,4 @@ wandb:
   log_validation_videos: true
 
 seed: 42
-output_dir: /data/aviad/runs/t2va_lora
+output_dir: ${H3_RUNS}/t2va_lora

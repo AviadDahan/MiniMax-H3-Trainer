@@ -10,7 +10,7 @@
 # =============================================================================
 
 model:
-  model_path: /data/aviad/models/MiniMax-H3
+  model_path: ${H3_MODEL_PATH}
   variant: fl2va
   training_mode: lora
   load_checkpoint: null
@@ -50,7 +50,7 @@ acceleration:
   quantization: none
   offload_optimizer_during_validation: false
 data:
-  preprocessed_data_root: /data/aviad/datasets/character/.precomputed
+  preprocessed_data_root: ${H3_DATASETS}/character/.precomputed
   num_dataloader_workers: 2
   val_split_every: 20
   shuffle: true
@@ -101,4 +101,4 @@ wandb:
   - v2a
   log_validation_videos: true
 seed: 42
-output_dir: /data/aviad/runs/v2a_lora
+output_dir: ${H3_RUNS}/v2a_lora

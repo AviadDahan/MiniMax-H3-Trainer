@@ -6,8 +6,10 @@ where H3's geometry rules live (frames on the ``17n + 5`` grid, dimensions
 divisible by 32, references only on the ref2va variant), so a config that parses
 has already been checked against the model's contract.
 
-``model.model_path`` points at a local checkout, so these run only where the
-weights are present; elsewhere they skip rather than fail.
+``model.model_path`` points at a local checkout (through ``${H3_MODEL_PATH}``), so
+these run only where the weights are present; elsewhere they skip rather than
+fail. The path is expanded first — checking the unexpanded ``${...}`` literal
+would skip on every machine, including the ones that can run the test.
 """
 
 from pathlib import Path
@@ -15,7 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from h3_trainer.config import H3TrainerConfig
+from h3_trainer.config import H3TrainerConfig, expand_path
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 CONFIGS = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -29,7 +31,7 @@ def test_configs_directory_is_not_empty():
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.stem)
 def test_config_validates(path: Path):
     payload = yaml.safe_load(path.read_text())
-    model_path = Path(payload["model"]["model_path"])
+    model_path = expand_path(payload["model"]["model_path"])
     if not model_path.exists():
         pytest.skip(f"{model_path} not present on this machine")
 
@@ -60,3 +62,22 @@ def test_reference_conditions_only_on_the_ref2va_variant(path: Path):
             f"{path.name} packs reference conditions but targets the "
             f"{payload['model']['variant']} transformer"
         )
+
+
+def test_paths_expand_environment_variables(monkeypatch, tmp_path):
+    """``${VAR}`` in a path must resolve, or a clone needs editing per machine."""
+    monkeypatch.setenv("H3_TEST_ROOT", str(tmp_path))
+    assert expand_path("${H3_TEST_ROOT}/runs/x") == tmp_path / "runs" / "x"
+    assert expand_path("$H3_TEST_ROOT/runs/x") == tmp_path / "runs" / "x"
+
+
+def test_an_unset_variable_stays_visible():
+    """It must not collapse to an empty path -- the name has to survive into the error."""
+    assert "H3_DEFINITELY_UNSET" in str(expand_path("${H3_DEFINITELY_UNSET}/models"))
+
+
+def test_shipped_configs_do_not_hardcode_a_machine():
+    """The configs must not carry one machine's absolute paths."""
+    for path in CONFIGS:
+        text = path.read_text()
+        assert "/data/aviad" not in text, f"{path.name} hardcodes an absolute local path"
