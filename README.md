@@ -101,57 +101,6 @@ bash scripts/download_model.sh  # ~210GB (skips the duplicated FL2VA/ and Ref2VA
 
 ---
 
-## Captions
-
-H3 takes a plain prose prompt — there is no required template. What matters is that it conditions on
-**audio as well as video**, so a caption that describes only what a clip looks like trains a model
-that ignores what it sounds like. Describe the sound: speech, ambience, and what makes noise.
-
-Put a trigger token in the captions **or** pass `--lora-trigger`, never both — duplicating it degrades
-prompt adherence.
-
----
-
-## Prior art: what the reference trainer got right, and what it left open
-
-[MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning) did the hard part first.
-Its `FIXES.md` is the reason this project didn't have to rediscover H3's numeric conventions, and its
-README carries measurements worth having in one place.
-
-**Insights inherited from it**
-
-| insight | why it matters |
-|---|---|
-| Two-stage design — cache latents offline so the 33B transformer is the only large thing on the GPU | the architectural decision this trainer is also built on |
-| `t = 1 − σ`, data-ward velocity `v = x₀ − ε`, two σ per step, zero-audio weighted to 0 | the five numeric conventions; each fails silently |
-| Deterministic `md5(id) % 20` validation split on a fixed σ grid with seeded noise | makes a val curve a function of the weights, comparable across runs |
-| Save only trainable tensors, gathered from ZeRO-3 shards | full state is ~66GB and stalls rank 0 past the NCCL watchdog |
-| **Measured sequence ceiling ≈70k tokens** on 8×A800-80GB (65k ⇒ 76GB steady; 76k OOMs) | the number that tells you what resolution × duration is affordable |
-| **Throughput:** ~7.5–8 min/step for 65k-token 30s sequences (LoRA, 8×A800); ~53 s/step for heads at 33k | sets expectations before you start a multi-day run |
-| **Evidence the conventions matter:** with timestep direction and velocity sign inverted, a heads-only run's loss *rises* 7.2 → 9.5 over 10 steps; corrected, it sits at 0.3–1.0 stable over 1000 steps | the clearest statement anywhere of why these details are not pedantry |
-| `H3_MAX_LF` — truncate cached samples to *n* latent frames at load time | change the token budget without re-encoding a cache |
-| Long-clip variant: concatenate two consecutive clips into one ~30s sample, re-aligned to 17n+5 with the seam index kept | how to train beyond H3's 15s generation window |
-| Sparse attention (H3's final training stage) is **not released** — training runs full attention | the reason the token budget is what it is, and unlikely to improve |
-
-**Limitations it documents — and where this trainer stands**
-
-| its limitation | here |
-|---|---|
-| Reference media never reach the conditioning sequence; "the main open TODO for faithful Ref2VA fine-tuning" | **implemented** — reference rows packed, masked from the loss, trained |
-| No shuffling between epochs; batch size fixed at 1 sequence | **implemented** — bucketed sampler with per-epoch shuffling, gradient accumulation |
-| `--resume` restores weights only, no optimizer state | **implemented** — weights + optimizer + scheduler + step |
-| Full attention only, ~70k-token ceiling | **inherited** — same constraint; enforced by a pre-flight all-reduced skip gate |
-
-**Bugs found in it while building this** — see [Two upstream bugs this avoids](#two-upstream-bugs-this-avoids)
-above: LoRA targets that match nothing, and a `transformers` pin that predates the API H3's conditioner
-needs.
-
-It also reports something this project has *not* matched: a production run of LoRA over **2,000 ~30-second
-clips at 448×768 (~65k tokens/sequence) on 8×A800**. Everything here has been validated at 36 clips and
-~10k tokens.
-
----
-
 ## Training
 
 ### 1. Prepare a dataset
@@ -377,8 +326,9 @@ straightforwardly dual-use.
 - **MiniMax** for [H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) and for releasing the weights.
 - **Lightricks** for [LTX-2's `ltx-trainer`](https://github.com/Lightricks/LTX-2/tree/main/packages/ltx-trainer),
   the design reference for the config schema, the flexible strategy and the overall shape of this tool.
-- **[MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning)** for `FIXES.md`,
-  which documents H3's numeric conventions and the ZeRO-3 landmines — the hard part, done first.
+- **[MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning)** for `FIXES.md` —
+  H3's numeric conventions, the ZeRO-3 landmines, and the measured ~70k-token sequence ceiling; the
+  hard part, done first, and summarised in [docs/h3-quirks.md](docs/h3-quirks.md#measurements-from-prior-work).
 - **HuggingFace** for the diffusers H3 integration this builds directly on.
 
 ## License

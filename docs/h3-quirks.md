@@ -129,3 +129,28 @@ those knobs would do nothing, so this trainer does not have them.
 * **Checkpoint before validating.** A validation forward leaves ZeRO-3 prefetch in flight, and a
   parameter gather immediately after fails with "Cannot partition a param in flight".
 * **`expandable_segments:True`** must be set before torch is imported.
+
+
+## Measurements from prior work
+
+Numbers reported by [MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning),
+worth having in one place. Measured on 8×A800-80GB, not reproduced here.
+
+| measurement | value |
+|---|---|
+| Sequence ceiling, full attention + LoRA + ZeRO-3 | **≈70k tokens** (65k ⇒ 76GB steady; 76k OOMs) |
+| Throughput, 65k-token 30s sequences, LoRA | ~7.5–8 min/step |
+| Throughput, heads-only at 33k tokens | ~53 s/step |
+| Largest reported run | LoRA over 2,000 ~30s clips at 448×768 |
+
+**Why the conventions on this page are not pedantry.** With the timestep direction and velocity sign
+inverted, they report a heads-only run whose loss *rises* — 7.2 → 9.5 over 10 steps. Corrected, the
+same setup sits at 0.3–1.0, stable over 1000 steps. That is the clearest available evidence that these
+details decide whether a run trains at all.
+
+**Sparse attention** — used in H3's final training stage — is **not released**. Training therefore runs
+full attention, which is what sets the token ceiling above, and it is unlikely to improve.
+
+Two knobs enforce the budget without re-encoding a cache: `H3_MAX_LF` (truncate cached samples to *n*
+latent frames at load time) and a pre-flight all-reduced skip gate, which this trainer implements as
+`optimization.max_seq_tokens`.
