@@ -46,9 +46,8 @@ and `h3-lora-run`.
 - Train **LoRA** adapters on H3 - character, style, image-to-video, video-to-audio. Demonstrated
   end to end below.
 - Train **IC-LoRA** adapters, where a reference image/video/audio is packed *in-context* into the
-  sequence - the one thing no other public H3 trainer implements. ⚠️ **Experimental**: the packing is
-  verified and it trains, but no adapter has yet been trained to convergence and generated from. See
-  [status](#ic-lora-status).
+  sequence - the one thing no other public H3 trainer implements. 🚧 **Under construction**, see
+  [IC-LoRA](#-ic-lora).
 - Configs, ergonomics and CLI shaped after LTX-2's `ltx-trainer`; numerics shaped after H3, which
   differs from ordinary flow matching in ways that silently corrupt weights.
 - **Built to be driven by an agent.** Unknown config keys fail at load rather than six hours in;
@@ -144,7 +143,7 @@ trainer, and the diffusers integration is inference-only. This is the trainer.
 | | |
 |---|---|
 | **training modes** | t2va, i2v/fl2va and v2a from one `flexible` strategy; a2v and first+last-frame are expressible in the same schema but ship no config and have never been run |
-| **reference conditioning** ⚠️ | reference image/video/audio packed in-context and masked from the loss - experimental, see [status](#ic-lora-status) |
+| **reference conditioning** ⚠️ | reference image/video/audio packed in-context and masked from the loss - 🚧 under construction, see [IC-LoRA](#-ic-lora) |
 | **prompt vision blocks** | keyframes and references appear in the conditioner's presentation, tagged as video |
 | **configuration** | YAML, validated - unknown keys fail at load, not six hours in |
 | **data** | offline two-pass latent cache; VAE round-trip verification built in |
@@ -225,7 +224,7 @@ python scripts/train.py configs/t2va_lora.yaml --set optimization.steps=2000 lor
 | character AV (48GB) | [`character_av_lora.yaml`](configs/character_av_lora.yaml) | bf16 `model_parallel` |
 | image → video | [`i2v_lora.yaml`](configs/i2v_lora.yaml) | `first_frame` condition |
 | video → audio | [`v2a_lora.yaml`](configs/v2a_lora.yaml) | `video.is_generated: false` |
-| **IC-LoRA** ⚠️ | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` - experimental, see [status](#ic-lora-status) |
+| **IC-LoRA** ⚠️ | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` - 🚧 under construction, see [IC-LoRA](#-ic-lora) |
 | low VRAM | [`t2va_lora_low_vram.yaml`](configs/t2va_lora_low_vram.yaml) | NF4 base, DDP replicas |
 
 Watch `loss_video` and `loss_audio` **separately**. A healthy total hiding a flat audio term is the
@@ -340,32 +339,10 @@ as unusable for generation.
 
 ---
 
-## ⚠️ IC-LoRA status
+## 🚧 IC-LoRA
 
-<a name="ic-lora-status"></a>
-
-In-context reference conditioning is the capability here that exists nowhere else, and it is
-**experimental**. Being precise about the line:
-
-**Verified.** Reference latents are packed into the sequence in the layout the inference pipeline
-builds - a reference image contributes 4,096 rows to an 8,741-row sequence. Reference rows are pinned
-at their conditioning timesteps (visual `t=0.999`, audio clean at `t=1.0`), masked out of the loss,
-and gradients flow to the adapter. The packing, the timesteps and the encoding recipe were each
-checked line by line against the pinned diffusers integration.
-
-**Not verified.** No IC-LoRA has been trained to convergence, and **no generation has been produced
-from a reference**. Until that exists, treat reference conditioning as a mechanism that is correct on
-paper and in shape, not as a demonstrated result.
-
-**Two known gaps**, both documented where they live:
-
-* reference **dropout** (`probability < 1.0`) removes the reference rows but leaves its label and
-  vision block in the cached prompt - a state inference never produces. Use `probability: 1.0` until
-  preprocessing caches a second, reference-free embedding.
-* a faithful video reference is **expensive**: at inference H3 places it on its own 768-short-edge
-  canvas whatever your target bucket, which is tens of thousands of rows on its own.
-  `--reference-canvas target` trades that fidelity for a run you can afford, and the choice is
-  recorded in the cache.
+**Under construction.** In-context reference conditioning trains, but it has not been demonstrated
+end to end yet. Treat it as experimental.
 
 ---
 
@@ -378,7 +355,7 @@ What has actually been measured on this hardware, not claims:
 | VAE round-trip (video) | 22.8 dB PSNR on a hard synthetic pattern; colour, geometry and motion intact |
 | VAE round-trip (audio) | dominant frequency preserved (439.5 Hz), 0.82 waveform correlation |
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
-| IC-LoRA packing ⚠️ | a reference image contributes 4,096 rows to an 8,741-row sequence, loss over the 448 target rows only - packing only; **no conditioned generation yet**, see [status](#ic-lora-status) |
+| IC-LoRA packing ⚠️ | a reference image contributes 4,096 rows to an 8,741-row sequence, loss over the 448 target rows only - packing only; **no conditioned generation yet** |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
 | Unit tests | 52 passing, `ruff` clean |
