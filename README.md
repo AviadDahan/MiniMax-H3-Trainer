@@ -13,7 +13,19 @@
 
 ---
 
-## TL;DR
+## 📚 Documentation
+
+* [docs/quick-start.md](docs/quick-start.md) — first run, end to end
+* [docs/dataset-preparation.md](docs/dataset-preparation.md) — manifests, buckets, captions
+* [docs/configuration-reference.md](docs/configuration-reference.md) — every config key
+* [docs/training-modes.md](docs/training-modes.md) — how each mode maps onto the strategy
+* [docs/h3-quirks.md](docs/h3-quirks.md) — the model contract, in detail
+* [docs/troubleshooting.md](docs/troubleshooting.md) — OOM, hangs, silent failures
+* [artifacts/README.md](artifacts/README.md) — every run output and what it demonstrates
+
+---
+
+## ⚡ TL;DR
 
 - Train **LoRA** adapters on H3 — character, style, voice, image-to-video, video-to-audio.
 - Train **IC-LoRA** adapters, where a reference image/video/audio is packed *in-context* into the
@@ -36,7 +48,7 @@ python scripts/generate.py --prompt "..." --lora runs/.../checkpoint-0000600 --a
 
 ---
 
-## Demo
+## 🎬 Demo
 
 <!-- DEMO:START -->
 A character AV LoRA trained with this repo: **36 clips, rank 16, 1200 steps, ~6 h on 4×A6000**. The
@@ -48,25 +60,29 @@ unrelated settings, same seed family, neither scene in the training set:
 
 ![anchor beside two generations](docs/demo/character_identity.png)
 
-**The trigger does the work.** Same seed, same prompt, adapter off (top) and on (bottom). The base
-model reads the prompt as a landscape; with the adapter the trigger `OHWXMIRA` resolves to the
-character:
+**With sound on.** H3 generates video and audio in one pass, so a contact sheet is half the evidence.
+Every clip below carries its generated 32kHz stereo soundtrack.
 
-![base versus adapter on a canal prompt](docs/demo/character_ab_canal.png)
+Same prompt, same seed — **base on the left, adapter on the right**. The trigger `OHWXMIRA` turns a
+canal landscape into the character, speaking:
 
-**And it stays contained.** A prompt with no trigger is essentially untouched — this is the check for
-prompt-adherence collapse, the usual way a character LoRA quietly ruins a model:
+<p align="center">
+  <video src="docs/demo/character_ab_canal.mp4" width="720" controls></video>
+</p>
 
-![base versus adapter on a control prompt](docs/demo/character_control.png)
+The same adapter in an unrelated scene, from a prompt whose setting appears nowhere in the training
+data — the face and voice carry over, the workshop does not come from the dataset:
 
-**The clips, with sound.** H3 generates video and audio in one pass, so the mp4s are the real
-evidence — the contact sheets above are half of it. GitHub plays these when you open the file:
+<p align="center">
+  <video src="docs/demo/character_workshop_lora.mp4" width="720" controls></video>
+</p>
 
-| | adapter off | adapter on |
-|---|---|---|
-| canal, triggered | [`character_sample0_base.mp4`](docs/demo/character_sample0_base.mp4) | [`character_sample0_lora.mp4`](docs/demo/character_sample0_lora.mp4) |
-| workshop, triggered | — | [`character_sample1_lora.mp4`](docs/demo/character_sample1_lora.mp4) |
-| retriever, **no trigger** | [`character_sample2_base.mp4`](docs/demo/character_sample2_base.mp4) | [`character_sample2_lora.mp4`](docs/demo/character_sample2_lora.mp4) |
+And the containment check: **no trigger, base left, adapter right.** A character LoRA that quietly
+rewrites every other prompt is a broken one:
+
+<p align="center">
+  <video src="docs/demo/character_ab_control.mp4" width="720" controls></video>
+</p>
 
 Held-out video loss: 0.454 → 0.2675 (150) → 0.2415 (450) → 0.2430 (800) → **0.2356 (1200)**. Note the
 run looked converged from 450 to 800 and then improved again — one reason `plot_metrics.py` reports a
@@ -81,7 +97,7 @@ came out of H3, which is a clean test of the trainer and an easier problem than 
 
 ---
 
-## What it does
+## 🔍 What it does
 
 MiniMax released H3's weights "to support further development, including fine-tuning" but shipped no
 trainer, and the diffusers integration is inference-only. This is the trainer.
@@ -117,7 +133,7 @@ processor helper that builds them nor the model argument that consumes them exis
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 **Prerequisites:** Linux, CUDA, Python 3.11+, and either ≥2 GPUs of 48GB or one 80GB card.
 `ffmpeg`/`ffprobe` on `PATH`.
@@ -134,7 +150,7 @@ bash scripts/download_model.sh  # ~210GB (skips the duplicated FL2VA/ and Ref2VA
 
 ---
 
-## Training
+## 🏋️ Training
 
 ### 1. Prepare a dataset
 
@@ -179,7 +195,7 @@ curve with sigma controlled, which is the only way it's readable at all.
 
 ---
 
-## Inference
+## 🎥 Inference
 
 ```bash
 python scripts/generate.py --prompt "..." --out out.mp4                      # text → video+audio
@@ -201,7 +217,7 @@ python scripts/generate.py --prompt "..." --lora ckpt/ --ab --out out.mp4    # A
 
 ---
 
-## Method
+## 🧮 Method
 
 H3 denoises **one packed sequence** holding text, conditioning and both target modalities at once:
 
@@ -233,7 +249,7 @@ Full detail: [docs/h3-quirks.md](docs/h3-quirks.md).
 
 ---
 
-## Hardware
+## 💻 Hardware
 
 H3 is 33B — 66GB in bf16 — and the conditioner is another 63GB. On 48GB cards the right answer isn't
 the obvious one. Measured on 8×A6000 (no NVLink):
@@ -266,7 +282,7 @@ control-adapter runs around a bucket you can afford, not the largest one that fi
 
 ---
 
-## Results
+## 📊 Results
 
 What has actually been measured on this hardware, not claims:
 
@@ -277,12 +293,12 @@ What has actually been measured on this hardware, not claims:
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
 | IC-LoRA packing | a reference image contributes 4,096 rows to an 8,741-row sequence; loss over the 448 target rows only |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
-| Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#demo) |
+| Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
 | Unit tests | 46 passing |
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
 **Shipped**
 
@@ -328,7 +344,7 @@ What has actually been measured on this hardware, not claims:
 
 ---
 
-## Ethical considerations
+## ⚖️ Ethical considerations
 
 This trains models that reproduce a specific person's **appearance and voice** together. That is
 straightforwardly dual-use.
@@ -341,17 +357,7 @@ straightforwardly dual-use.
 
 ---
 
-## Documentation
-
-* [docs/quick-start.md](docs/quick-start.md) — first run, end to end
-* [docs/dataset-preparation.md](docs/dataset-preparation.md) — manifests, buckets, captions
-* [docs/configuration-reference.md](docs/configuration-reference.md) — every config key
-* [docs/training-modes.md](docs/training-modes.md) — how each mode maps onto the strategy
-* [docs/h3-quirks.md](docs/h3-quirks.md) — the model contract, in detail
-* [docs/troubleshooting.md](docs/troubleshooting.md) — OOM, hangs, silent failures
-* [artifacts/README.md](artifacts/README.md) — every run output and what it demonstrates
-
-## Scripts
+## 📦 Scripts
 
 | script | purpose |
 |---|---|
@@ -369,16 +375,16 @@ straightforwardly dual-use.
 
 ---
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 - **MiniMax** for [H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) and for releasing the weights.
 - **Lightricks** for [LTX-2's `ltx-trainer`](https://github.com/Lightricks/LTX-2/tree/main/packages/ltx-trainer),
   the design reference for the config schema, the flexible strategy and the overall shape of this tool.
 - **[MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning)** for `FIXES.md` —
-  H3's numeric conventions, the ZeRO-3 landmines, and the measured ~70k-token sequence ceiling; the
-  hard part, done first, and summarised in [docs/h3-quirks.md](docs/h3-quirks.md#measurements-from-prior-work).
+  H3's numeric conventions, the ZeRO-3 landmines, and the measured ~70k-token sequence ceiling,
+  summarised in [docs/h3-quirks.md](docs/h3-quirks.md#measurements-from-prior-work).
 - **HuggingFace** for the diffusers H3 integration this builds directly on.
 
-## License
+## 📄 License
 
 Apache-2.0. The MiniMax-H3 weights are governed by the MiniMax H3 Community License Agreement.
