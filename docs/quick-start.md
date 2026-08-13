@@ -44,9 +44,13 @@ One row per clip, in `.json`, `.jsonl` or `.csv`:
   "caption": "A woman in a red coat walks through rain, speaking: \"not again\"."}]
 ```
 
-Clips should be 3–15s, at exactly 24.000 fps, with their real audio track kept — H3 trains video and
-audio jointly, so a silent track teaches silence. `scripts/split_scenes.py` cuts long footage and
-`scripts/normalize_clips.py` handles the fps/resolution normalization.
+Clips should be 5–15s, at exactly 24.000 fps, with their real audio track kept — H3 trains video and
+audio jointly, so a silent track teaches silence. `scripts/normalize_clips.py` does the fps,
+resolution and audio normalization for a directory of raw footage:
+
+```bash
+python scripts/normalize_clips.py raw/ clips/ --resolution-bucket 704x704x124 --manifest dataset.json
+```
 
 ## 4. Cache the latents
 
