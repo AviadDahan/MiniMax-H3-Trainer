@@ -1,0 +1,138 @@
+# =============================================================================
+# Skeleton-conditioned IC-LoRA -- structural control that H3 does not ship with
+# =============================================================================
+#
+# H3 has no ControlNet, no pose input, no depth or edge branch. IC-LoRA is how
+# you add one: a rendered skeleton video is packed into the sequence as an
+# in-context reference,
+#
+#     [ text | skeleton reference rows | target audio | target video ]
+#
+# and the adapter learns that the target should follow it. Reference rows attend
+# in both directions, sit at their pinned conditioning timestep, and carry no
+# loss -- so nothing here trains the model to reproduce skeletons, only to obey
+# them.
+#
+# Two things differ from configs/ref2va_ic_lora.yaml, and both matter:
+#
+#   * probability: 1.0. Identity references are dropped occasionally so the
+#     adapter still works unconditioned. A structural reference is the entire
+#     instruction -- dropping it teaches the adapter to invent motion, which is
+#     the failure mode this config exists to avoid.
+#   * a portrait bucket. Square crops of full-body footage cut the legs off, and
+#     a pose adapter that never sees ankles cannot place feet.
+#
+# Data comes from scripts/extract_pose.py, which renders MediaPipe skeletons
+# frame-aligned with their source clips and rejects anything not showing a full
+# body. Preprocess with the reference column wired up:
+#
+#   python scripts/extract_pose.py raw/ /data/aviad/datasets/pose_iclora \
+#       --resolution-bucket 448x768x124
+#   python scripts/process_dataset.py /data/aviad/datasets/pose_iclora/dataset.json \
+#       --resolution-buckets 448x768x124 --variant ref2va --references
+#   python scripts/train.py configs/pose_ic_lora.yaml
+# =============================================================================
+
+model:
+  model_path: /data/aviad/models/MiniMax-H3
+  variant: ref2va
+  training_mode: lora
+  load_checkpoint: null
+lora:
+  rank: 32
+  alpha: 32
+  dropout: 0.0
+  target_modules:
+  - to_q
+  - to_k
+  - to_v
+  - to_out.0
+training_strategy:
+  name: flexible
+  video:
+    is_generated: true
+    latents_dir: latents
+    conditions:
+    - type: reference
+      modality: video
+      latents_dir: reference_latents
+      probability: 1.0
+  audio:
+    # The source footage is silent. Zero audio latents are weighted to 0 rather
+    # than dropped -- see docs/h3-quirks.md #4; dropping the term desynchronizes
+    # ranks. The audio head is present in the graph and learns nothing.
+    is_generated: true
+    latents_dir: audio_latents
+    conditions: []
+optimization:
+  learning_rate: 0.0001
+  steps: 600
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  optimizer_type: adamw
+  scheduler_type: linear
+  warmup_steps: 30
+  enable_gradient_checkpointing: true
+  # A 448x768x124 target plus a reference of the same geometry is roughly twice
+  # the sequence of the character run. The gate is set above the observed length
+  # so nothing is silently skipped; raise it if extraction changes the bucket.
+  max_seq_tokens: 40000
+acceleration:
+  # ZeRO-3 cannot start on 48GB cards (each rank materializes 66GB before
+  # partitioning). model_parallel splits the blocks across GPUs instead.
+  strategy: model_parallel
+  mixed_precision_mode: bf16
+  quantization: none
+  offload_optimizer_during_validation: false
+data:
+  preprocessed_data_root: /data/aviad/datasets/pose_iclora/.precomputed
+  num_dataloader_workers: 2
+  val_split_every: 10
+  shuffle: true
+validation:
+  samples:
+  - prompt: a person dancing, full body in frame, following the motion of the reference skeleton
+  video_dims:
+  - 448
+  - 768
+  - 124
+  frame_rate: 24.0
+  seed: 42
+  inference_steps: 20
+  interval: 150
+  # Sampling with a reference goes through scripts/generate.py after training;
+  # in-loop media sampling would hold a second pipeline alongside the sharded
+  # transformer.
+  sample_media: false
+  loss_sigmas:
+  - 0.3
+  - 0.6
+  - 0.9
+  max_loss_samples: 6
+  skip_initial_validation: false
+checkpoints:
+  interval: 150
+  keep_last_n: 5
+  precision: bfloat16
+  save_training_state: full
+flow_matching:
+  timestep_sampling_mode: uniform
+  timestep_sampling_params: {}
+  video_shift: 12.0
+  audio_shift: 3.0
+hub:
+  push_to_hub: false
+  hub_model_id: null
+wandb:
+  enabled: true
+  project: h3-trainer
+  entity: null
+  name: pose-ic-lora
+  tags:
+  - h3
+  - ic-lora
+  - pose
+  log_validation_videos: true
+seed: 42
+output_dir: /data/aviad/runs/pose_ic_lora
