@@ -27,8 +27,9 @@ made loud instead of silent.*
 ## 📚 Documentation
 
 **Working on this with an agent?** Start with [AGENTS.md](AGENTS.md) (the invariants and the traps)
-and [CLAUDE.md](CLAUDE.md) (how to drive this repo - which document answers which question). Two
-skills ship in `.claude/skills/`, mirrored at `.agents/skills/`: `h3-dataset-prep` and `h3-lora-run`.
+and [CLAUDE.md](CLAUDE.md) (how to drive this repo - which document answers which question). Three
+skills ship in `.claude/skills/`, mirrored at `.agents/skills/`: `h3-dataset-prep`, `h3-captions`
+and `h3-lora-run`.
 
 * [docs/quick-start.md](docs/quick-start.md) - first run, end to end
 * [docs/dataset-preparation.md](docs/dataset-preparation.md) - manifests, buckets, captions

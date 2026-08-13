@@ -7,9 +7,9 @@ the pinned diffusers integration rather than reasoning from what flow matching u
 
 ## Skills
 
-`.claude/skills/` (mirrored at `.agents/skills/` by symlink, so the two cannot drift) carries two
-skills for driving this repo: `h3-dataset-prep` and `h3-lora-run`. Both are written from this repo's
-own docs and runs.
+`.claude/skills/` (mirrored at `.agents/skills/` by symlink, so the two cannot drift) carries three
+skills for driving this repo: `h3-dataset-prep`, `h3-captions` and `h3-lora-run`. All three are
+written from this repo's own docs and runs.
 
 For H3 *prompt* structure, MiniMax publishes the authoritative guide as a skill in their own
 repository (https://github.com/MiniMax-AI/MiniMax-H3, `.claude/skills/h3-prompt-writing`). It is
