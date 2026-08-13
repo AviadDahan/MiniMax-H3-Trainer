@@ -24,6 +24,14 @@ made loud instead of silent.*
 
 ---
 
+### 📰 Announcements
+
+* 🕺 **13 Aug 2026** - Pose control is available. [See it](#-ic-lora-structural-control)
+* 🎭 **13 Aug 2026** - LoRA works. [Demo](#-demo)
+* 🚀 **13 Aug 2026** - First release. LoRA and IC-LoRA for H3 on 48GB cards, without quantization.
+
+---
+
 <p align="center">
   <img src="docs/demo/announcement.webp" alt="A woman underwater saying: your agent can train MiniMax H3 now" width="720">
 </p>
