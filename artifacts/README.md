@@ -23,7 +23,7 @@ bash scripts/collect_artifacts.sh
 | `pose-run/` | the pose IC-LoRA run: `checkpoint-*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `pose-dataset/` | 97 skeleton/footage pairs, the train/held-out split, and the `.precomputed320` cache |
 
-Finished, static evidence (`inference/`, `verification/`, `smoke-runs/`) is copied, so it survives if
+Finished results (`inference/`, `verification/`, `smoke-runs/`) are copied, so they survive if
 the run directories are cleaned up. Media and weights are gitignored; this file is the committed index.
 
 To watch the newest evaluation as it appears:
@@ -38,7 +38,7 @@ grep 'val/' artifacts/character-run/train.log  # held-out loss per checkpoint
 | file | what it shows |
 |---|---|
 | `cat_shard.mp4` | bf16 transformer sharded across 8 GPUs, 512×512×124, 20 steps. Coherent video with a synchronized meow (transient at ~0.9s, energy at ~1069 Hz). **This is what working inference looks like.** |
-| `cat.mp4` | the same prompt and seed with an NF4 base. Coloured static - kept as the evidence that 4-bit quantization of H3's AdaLN branches destroys generation. |
+| `cat.mp4` | the same prompt and seed with an NF4 base. Coloured static - kept to show that 4-bit quantization of H3's AdaLN branches destroys generation. |
 
 ## `character-run/` and `character-dataset/` (symlinks)
 

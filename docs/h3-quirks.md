@@ -145,7 +145,7 @@ worth having in one place. Measured on 8×A800-80GB, not reproduced here.
 
 **Why the conventions on this page are not pedantry.** With the timestep direction and velocity sign
 inverted, they report a heads-only run whose loss *rises* - 7.2 → 9.5 over 10 steps. Corrected, the
-same setup sits at 0.3-1.0, stable over 1000 steps. That is the clearest available evidence that these
+same setup sits at 0.3-1.0, stable over 1000 steps. That is the clearest available sign that these
 details decide whether a run trains at all.
 
 **Sparse attention** - used in H3's final training stage - is **not released**. Training therefore runs

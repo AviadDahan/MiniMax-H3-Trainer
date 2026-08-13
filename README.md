@@ -148,7 +148,7 @@ sigma-controlled trend rather than a raw curve.
 **What this does not show.** Voice identity is unverified: the clips carry speech and the audio branch
 trains, but "does it sound like the same person" was never measured, only that speech is present and
 in the expected band. The adapter also learns the anchor's wardrobe along with the face, which is what
-36 clips of one outfit buys you. And nothing here is evidence about *real* footage - the whole dataset
+36 clips of one outfit buys you. And none of this says anything about *real* footage - the whole dataset
 came out of H3, which is a clean test of the trainer and an easier problem than the real thing.
 <!-- DEMO:END -->
 
@@ -342,7 +342,7 @@ control-adapter runs around a bucket you can afford, not the largest one that fi
 
 Written, reachable from config, and **never run** - treat as experimental and read the code before
 relying on it. Listed rather than removed because the code paths exist and are probably close; they
-simply have no evidence behind them.
+simply have never been run.
 
 | area | untested |
 |---|---|
@@ -375,7 +375,7 @@ clip that was never encoded, so following it cannot be memorization:
 <sub>Top: the held-out skeleton. Middle: generated at step 150. Bottom: step 300. Same reference, same
 seed.</sub>
 
-**The control that makes it evidence.** Give the *base* model the same skeleton and the same seed with
+**The control.** Give the *base* model the same skeleton and the same seed with
 no adapter, and it reproduces the skeleton rather than generating anything from it. The adapter is
 what converts a reference from something to copy into something to obey:
 
@@ -390,7 +390,7 @@ reference carries most of the usable signal.
 
 **What this is not.** The adapter itself is **not published**: it was trained on scraped short-form
 video whose subjects did not consent to being training data, which our own
-[ethics section](#ethical-considerations) rules out. What ships here is the pipeline and the evidence.
+[ethics section](#ethical-considerations) rules out. What ships here is the pipeline and the results.
 Output is soft because 320x576 is well below H3's native 768 short edge, a throughput choice
 (a reference costs as many rows as the target, and attention is quadratic), not an adapter limitation.
 
