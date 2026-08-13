@@ -20,7 +20,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -124,8 +126,54 @@ def main() -> int:
         pipeline.load_lora(args.lora, scale=args.lora_scale)
 
     pipeline.generate(request, args.out)
+    write_sidecar(args, request, args.out)
     logger.info("Done: %s", args.out)
     return 0
+
+
+def write_sidecar(args, request, output: Path) -> Path:
+    """Record what produced this clip, next to the clip.
+
+    A generated mp4 is indistinguishable from any other mp4 a week later: which
+    checkpoint, which seed, which reference, which canvas. Anything that ends up
+    in a README or an artifacts directory needs to carry that with it, so the
+    sidecar is written on every generation rather than on request.
+    """
+    def _git(*cmd: str) -> str | None:
+        try:
+            return subprocess.run(
+                ["git", *cmd], cwd=Path(__file__).resolve().parent.parent,
+                capture_output=True, text=True, timeout=5, check=True,
+            ).stdout.strip()
+        except Exception:
+            return None
+
+    record = {
+        "output": str(output),
+        "prompt": request.prompt,
+        "seed": request.seed,
+        "steps": request.num_inference_steps,
+        "resolution_bucket": f"{request.geometry.width}x{request.geometry.height}x{request.geometry.num_frames}",
+        "variant": args.variant,
+        "model_path": str(args.model_path),
+        "placement": args.placement,
+        "quantization": args.quantization,
+        "lora": str(args.lora) if args.lora is not None else None,
+        "lora_scale": args.lora_scale if args.lora is not None else None,
+        "image": str(args.image) if args.image else None,
+        "last_image": str(args.last_image) if args.last_image else None,
+        "references": request.references or None,
+        # Baked into the reference rows and unrecoverable from them; generating
+        # under a different canvas than the adapter trained on gives bad output
+        # with nothing to say why.
+        "reference_canvas": args.reference_canvas if request.references else None,
+        "trainer_commit": _git("rev-parse", "HEAD"),
+        "trainer_dirty": bool(_git("status", "--porcelain")),
+    }
+    path = output.with_suffix(".json")
+    path.write_text(json.dumps(record, indent=1, default=str))
+    logger.info("Wrote %s", path)
+    return path
 
 
 if __name__ == "__main__":
