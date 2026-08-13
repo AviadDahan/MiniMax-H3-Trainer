@@ -104,7 +104,40 @@ H3 accepts up to 9 image, 3 video and 3 audio references per request. An audio r
 alone — it needs at least one visual reference or the prompt to anchor the generation.
 
 **Reference dropout matters here.** With `probability: 1.0` the adapter only ever sees a reference and
-loses the unconditioned path; 0.8–0.9 keeps both alive.
+loses the unconditioned path; 0.8–0.9 keeps both alive. The exception is structural conditioning,
+below.
+
+## Structural control: pose, depth, edges
+
+H3 ships no ControlNet and no structural input of any kind. IC-LoRA is the route to one: render the
+control signal as a video, pack it as an in-context reference, and let the adapter learn that the
+target should follow it. Nothing in the packing is special-cased for this — a skeleton video is a
+video reference like any other. What changes is how you configure it.
+
+```yaml
+conditions:
+  - type: reference
+    modality: video
+    latents_dir: reference_latents
+    probability: 1.0        # not 0.9 -- see below
+```
+
+* **`probability: 1.0`.** An identity reference is a hint, so dropping it occasionally is healthy. A
+  structural reference *is the instruction*: steps without one teach the adapter to invent motion,
+  which is the exact failure this mode exists to prevent.
+* **Bucket for the subject.** Square crops of full-body footage cut the legs off, and an adapter that
+  never sees ankles cannot place feet. `448x768x124` is the portrait bucket used here.
+* **Budget for two clips.** The reference costs as many rows as the target — roughly 25k rows at that
+  bucket, against 10k for an unconditioned 512×512 clip. Set `optimization.max_seq_tokens` above the
+  real length or samples are silently skipped.
+* **Alignment is the whole signal.** The control video must be frame-aligned with its target at
+  exactly 24.000 fps. A one-frame drift teaches a one-frame lag.
+
+`scripts/extract_pose.py` produces such pairs from ordinary footage, rendering MediaPipe skeletons
+with colour-coded bones (limbs must be distinguishable, which is why OpenPose renderings are coloured
+rather than white) and rejecting clips that do not show a full body for most of their length. The same
+shape works for depth or edge maps: swap the renderer, keep the manifest columns.
+`configs/pose_ic_lora.yaml` is the worked example.
 
 ## Running them on the hardware you have
 
