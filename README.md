@@ -2,9 +2,14 @@
 
 # h3-trainer
 
-**LoRA and IC-LoRA training for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
+**An agent-friendly trainer for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
+
+*LoRA and IC-LoRA, in a repo built so that a coding agent can run it without tribal knowledge: every
+capability labelled tested or untested, every model-specific convention written down and pinned by a
+test, and the failure modes made loud instead of silent.*
 
 [![Base model](https://img.shields.io/badge/base%20model-MiniMax--H3-blue)](https://huggingface.co/MiniMaxAI/MiniMax-H3)
+[![Agents](https://img.shields.io/badge/agents-AGENTS.md-purple)](AGENTS.md)
 [![Design reference](https://img.shields.io/badge/design%20reference-ltx--trainer-green)](https://github.com/Lightricks/LTX-2/tree/main/packages/ltx-trainer)
 [![diffusers](https://img.shields.io/badge/diffusers-pinned%20abc5e9b-orange)](https://github.com/huggingface/diffusers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
@@ -14,6 +19,9 @@
 ---
 
 ## 📚 Documentation
+
+**Working on this with an agent?** Start with [AGENTS.md](AGENTS.md) (the invariants and the traps)
+and [CLAUDE.md](CLAUDE.md) (how to drive this repo — which document answers which question).
 
 * [docs/quick-start.md](docs/quick-start.md) — first run, end to end
 * [docs/dataset-preparation.md](docs/dataset-preparation.md) — manifests, buckets, captions
@@ -35,6 +43,10 @@
   [status](#ic-lora-status).
 - Configs, ergonomics and CLI shaped after LTX-2's `ltx-trainer`; numerics shaped after H3, which
   differs from ordinary flow matching in ways that silently corrupt weights.
+- **Built to be driven by an agent.** Unknown config keys fail at load rather than six hours in;
+  `--print-config` and `--set key=value` make every run reproducible from one line; metrics are JSONL;
+  the H3 conventions that silently corrupt a run are documented *and* pinned by tests; and anything
+  never actually run is [labelled untested](#untested) rather than implied to work.
 - Runs on **48GB cards** — the 66GB bf16 transformer is split across GPUs in one process, no
   quantization required.
 - Every checkpoint exports a **ComfyUI-loadable** adapter, bit-exact.
