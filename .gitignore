@@ -10,6 +10,10 @@ dist/
 *.pt
 *.mp4
 *.wav
+
+# ...except the demo clips. They are small, and for a model whose whole point is
+# joint video *and* audio, a contact sheet is only half the evidence.
+!docs/demo/*.mp4
 .precomputed/
 outputs/
 runs/

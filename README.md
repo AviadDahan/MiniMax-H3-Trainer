@@ -59,6 +59,15 @@ prompt-adherence collapse, the usual way a character LoRA quietly ruins a model:
 
 ![base versus adapter on a control prompt](docs/demo/character_control.png)
 
+**The clips, with sound.** H3 generates video and audio in one pass, so the mp4s are the real
+evidence — the contact sheets above are half of it. GitHub plays these when you open the file:
+
+| | adapter off | adapter on |
+|---|---|---|
+| canal, triggered | [`character_sample0_base.mp4`](docs/demo/character_sample0_base.mp4) | [`character_sample0_lora.mp4`](docs/demo/character_sample0_lora.mp4) |
+| workshop, triggered | — | [`character_sample1_lora.mp4`](docs/demo/character_sample1_lora.mp4) |
+| retriever, **no trigger** | [`character_sample2_base.mp4`](docs/demo/character_sample2_base.mp4) | [`character_sample2_lora.mp4`](docs/demo/character_sample2_lora.mp4) |
+
 Held-out video loss: 0.454 → 0.2675 (150) → 0.2415 (450) → 0.2430 (800) → **0.2356 (1200)**. Note the
 run looked converged from 450 to 800 and then improved again — one reason `plot_metrics.py` reports a
 sigma-controlled trend rather than a raw curve.
