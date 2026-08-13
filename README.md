@@ -300,25 +300,35 @@ What has actually been measured on this hardware, not claims:
 - [x] ComfyUI adapter export
 - [x] Inference with multi-GPU sharding and same-seed A/B
 
-**Next**
+**Next — more of the model reachable**
 
-- [ ] **Control adapters** — skeleton → video via IC-LoRA, then depth and edge by the same route.
-      H3 has no native structural conditioning; IC-LoRA is how you add it.
-- [ ] **Real-footage pipeline** — automatic AV captioning, scene splitting, slow-motion detection.
-      Everything trained so far is H3-generated, which is self-distillation and easier than the real thing.
-- [ ] **Identity and voice metrics** — face and speaker embedding distance, so "did it learn the
-      character" is a number rather than a contact sheet
-- [ ] **Audio-branch per-sigma validation** — video has it, audio only lands in the total
+- [ ] **Structural control via IC-LoRA** — skeleton → video, then depth and edge by the same route.
+      H3 has no native structural conditioning; in-context reference video is how you add it.
+      Needs a conditioning-extraction step per control type, nothing new in the trainer.
+- [ ] **Video extension, inpainting and outpainting** — LTX-2 has them, H3's packed layout can express
+      them, and they are what people ask for after character adapters.
+- [ ] **Config files for `a2v` and first+last-frame** — both expressible today, neither shipped.
+- [ ] **Multi-resolution bucket training in a single run**, so a dataset isn't forced to one geometry.
 
-**Later**
+**Next — scale**
 
-- [ ] ZeRO-3 via `deepspeed.zero.Init`, so sharded data-parallel works on <80GB cards
-- [ ] Real batching — needs fixed-length captions, and H3 exposes no attention mask over the sequence
-- [ ] Sequence parallelism for 15s clips at 704p (~40k rows)
-- [ ] Video extension, inpainting and outpainting modes
-- [ ] Multi-resolution bucket training in a single run
-- [ ] `torch.compile` on the block stack; caching the precomputable AdaLN branches
-- [ ] Hub publishing with generated model cards, and a ComfyUI node
+- [ ] **ZeRO-3 via `deepspeed.zero.Init`** — sharded data-parallel currently cannot start on <80GB
+      cards, because each rank materializes all 66GB before partitioning. The largest single
+      throughput win available on 48GB hardware.
+- [ ] **Real batching** — H3's batch axis replicates one shared layout, so batching needs identical
+      geometry *and* caption length. Fixed-length caption padding would unlock it; the risk is that H3
+      exposes no attention mask over the packed sequence, so pad rows are attended to as content.
+- [ ] **Sequence parallelism** for 15s clips at 704p (~40k rows), which no single-GPU activation
+      budget covers.
+- [ ] **`torch.compile`** on the block stack, and caching the precomputable AdaLN branches (about a
+      third of the parameters) during training.
+
+**Later — surface**
+
+- [ ] Hub publishing with generated model cards
+- [ ] A ComfyUI node, so exported adapters have a first-class path to a UI
+- [ ] Characterise the quantization/quality trade-off: is int8 good enough to *evaluate* on, or only
+      to train against? (4-bit is documented as unusable for generation, but not measured.)
 
 ---
 
