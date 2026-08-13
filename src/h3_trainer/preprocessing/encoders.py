@@ -25,6 +25,7 @@ from PIL import Image
 
 from h3_trainer import logger
 from h3_trainer.constants import (
+    CONDITION_ENCODE_SEED,
     MINIMAX_H3_PIXEL_MEAN,
     MINIMAX_H3_PIXEL_STD,
     MINIMAX_H3_TEXT_ENCODER_LAYER,
@@ -35,9 +36,6 @@ from h3_trainer.constants import (
 from h3_trainer.model_loader import load_audio_vae, load_text_encoder, load_video_vae
 from h3_trainer.packing import encode_reference_geometry
 from h3_trainer.preprocessing.media import frames_to_pixel_tensor
-
-#: The seed H3 encodes conditioning latents under, fixed in the released pipeline.
-
 
 @dataclass
 class EncodedReference:
