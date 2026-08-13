@@ -1,13 +1,28 @@
 # Artifacts
 
-Everything this repo produced on 8×A6000, collected in one place. Refresh with:
+Everything this repo produced on 8×A6000, in one place. Rebuild with:
 
 ```bash
 bash scripts/collect_artifacts.sh
 ```
 
-It copies rather than moves, so the originals stay under `/data/aviad/runs` and
-`/data/aviad/datasets`. The media and weights here are gitignored — this file is the committed index.
+**Live work is symlinked, not copied**, so results appear here the moment they land:
+
+| link | points at |
+|---|---|
+| `character-run/` | the live character run: `checkpoint-*`, `eval_*`, `train.log`, `metrics.jsonl`, `wandb/` |
+| `character-dataset/` | anchor, 36 clips, manifest, `.precomputed` latent cache |
+| `runs/` | every run directory |
+
+Finished, static evidence (`inference/`, `verification/`, `smoke-runs/`) is copied, so it survives if
+the run directories are cleaned up. Media and weights are gitignored; this file is the committed index.
+
+To watch the newest evaluation as it appears:
+
+```bash
+ls -t artifacts/character-run/eval_*/          # newest first
+grep 'val/' artifacts/character-run/train.log  # held-out loss per checkpoint
+```
 
 ## `inference/`
 
@@ -16,13 +31,14 @@ It copies rather than moves, so the originals stay under `/data/aviad/runs` and
 | `cat_shard.mp4` | bf16 transformer sharded across 8 GPUs, 512×512×124, 20 steps. Coherent video with a synchronized meow (transient at ~0.9s, energy at ~1069 Hz). **This is what working inference looks like.** |
 | `cat.mp4` | the same prompt and seed with an NF4 base. Coloured static — kept as the evidence that 4-bit quantization of H3's AdaLN branches destroys generation. |
 
-## `character/`
+## `character-run/` and `character-dataset/` (symlinks)
 
-The synthetic character AV LoRA experiment.
+The synthetic character AV LoRA experiment. Paths below are relative to `character-dataset/`
+(anchor, clips, manifest) or `character-run/` (checkpoints, evaluations, logs).
 
 | path | contents |
 |---|---|
-| `anchor/` | `identity.png` (the identity reference), `voice.wav` (the voice reference), `anchor.mp4` (the generation both were taken from), `anchor.json` (character description, trigger, prompt) |
+| `character-dataset/anchor/` | `identity.png` (the identity reference), `voice.wav` (the voice reference), `anchor.mp4` (the generation both were taken from), `anchor.json` (character description, trigger, prompt) |
 | `clips/` | 36 training clips, generated with Ref2VA conditioned on the anchor image + voice. 512×512×124 at 24fps with real audio. |
 | `dataset.json` / `rejected.json` | the manifest after automatic QC (36 kept, 0 rejected) |
 | `precomputed_index.json` | the latent cache index: row counts, geometry, `has_audio` per sample |
