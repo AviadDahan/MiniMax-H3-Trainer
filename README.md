@@ -369,7 +369,7 @@ Trained on 92 skeleton/footage pairs at 320x576x124, rank 32. The reference belo
 clip that was never encoded, so following it cannot be memorization:
 
 <p align="center">
-  <img src="docs/demo/iclora_skeleton_following.png" alt="a held-out skeleton and the video generated from it" width="720">
+  <img src="docs/demo/iclora_following_576x1024.png" alt="a held-out skeleton and the video generated from it" width="720">
 </p>
 
 <sub>Top: the held-out skeleton. Bottom: generated from it at 576x1024. The adapter trained at
