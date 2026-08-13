@@ -1,5 +1,9 @@
 <div align="center">
 
+<a href="https://huggingface.co/MiniMaxAI/MiniMax-H3">
+  <img width="100%" src="https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/assets/minimax-h3.png" alt="MiniMax-H3">
+</a>
+
 # MiniMax H3 Trainer
 
 **An agent-friendly trainer for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
@@ -13,6 +17,9 @@ test, and the failure modes made loud instead of silent.*
 [![Design reference](https://img.shields.io/badge/design%20reference-ltx--trainer-green)](https://github.com/Lightricks/LTX-2/tree/main/packages/ltx-trainer)
 [![diffusers](https://img.shields.io/badge/diffusers-pinned%20abc5e9b-orange)](https://github.com/huggingface/diffusers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
+
+<sub>An independent, community trainer. Not affiliated with or endorsed by MiniMax — the banner is
+theirs, and links to the model it trains.</sub>
 
 </div>
 
