@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# h3-trainer environment.
+# MiniMax H3 Trainer environment.
 #
 # Everything this project touches -- HuggingFace weights, torch/triton kernel caches,
 # pip/uv wheels, wandb spool -- is redirected onto /data so $HOME never gets bloated.
 #
 # Source this before running anything:
-#     source /data/aviad/github/h3-trainer/scripts/env.sh
+#     source /path/to/MiniMax-H3-Trainer/scripts/env.sh
 #
 # PYTORCH_CUDA_ALLOC_CONF must be set *before* torch is imported (FIX8 in the
 # reference repo's FIXES.md); that is the main reason this is a shell file and

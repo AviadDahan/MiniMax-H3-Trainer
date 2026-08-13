@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "h3-trainer"
+name = "minimax-h3-trainer"
 version = "0.1.0"
 description = "LoRA and IC-LoRA training for MiniMax-H3 (joint video + stereo audio)"
 readme = "README.md"
@@ -37,10 +37,6 @@ dependencies = [
 [project.optional-dependencies]
 quant = ["optimum-quanto", "bitsandbytes"]
 dev = ["pytest", "ruff", "matplotlib", "pandas"]
-
-[project.scripts]
-h3-train = "h3_trainer.cli:train_main"
-h3-process-dataset = "h3_trainer.cli:process_dataset_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

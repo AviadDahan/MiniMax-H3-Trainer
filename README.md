@@ -1,6 +1,6 @@
 <div align="center">
 
-# h3-trainer
+# MiniMax H3 Trainer
 
 **An agent-friendly trainer for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
 
@@ -170,7 +170,7 @@ processor helper that builds them nor the model argument that consumes them exis
 `ffmpeg`/`ffprobe` on `PATH`.
 
 ```bash
-git clone <this repo> && cd h3-trainer
+git clone https://github.com/AviadDahan/MiniMax-H3-Trainer.git && cd MiniMax-H3-Trainer
 bash scripts/install_env.sh     # uv venv, torch 2.8, pinned diffusers, transformers 5.15
 source scripts/env.sh           # redirects every cache onto /data; sets the CUDA allocator config
 bash scripts/download_model.sh  # ~210GB (skips the duplicated FL2VA/ and Ref2VA/ trees)
@@ -373,53 +373,19 @@ What has actually been measured on this hardware, not claims:
 | IC-LoRA packing ⚠️ | a reference image contributes 4,096 rows to an 8,741-row sequence, loss over the 448 target rows only — packing only; **no conditioned generation yet**, see [status](#ic-lora-status) |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
-| Unit tests | 51 passing, `ruff` clean |
+| Unit tests | 52 passing, `ruff` clean |
 
 ---
 
 ## 🗺️ Roadmap
 
-**Shipped**
+Deliberately short. This is a trainer, not a platform.
 
-- [x] LoRA training — t2va, i2v/fl2va and v2a, each with a shipped config and a run behind it
-- [ ] IC-LoRA ⚠️ — packing verified and training runs, but not yet demonstrated end to end
-- [x] Model-parallel bf16 training on 48GB cards, no quantization needed
-- [x] Two-pass latent caching with VAE round-trip verification
-- [x] Exact resume — weights + optimizer + scheduler + step
-- [x] ComfyUI adapter export
-- [x] Inference with multi-GPU sharding and same-seed A/B
-
-**Next — more of the model reachable**
-
-- [ ] **Structural control via IC-LoRA** — skeleton → video, then depth and edge by the same route.
-      H3 has no native structural conditioning; in-context reference video is how you add it.
-      Needs a conditioning-extraction step per control type, nothing new in the trainer.
-- [ ] **Video extension, inpainting and outpainting** — LTX-2 has them, H3's packed layout can express
-      them, and they are what people ask for after character adapters.
-- [ ] **Config files for `a2v` and first+last-frame** — both expressible today, neither shipped.
-- [ ] **Multi-resolution bucket training in a single run**, so a dataset isn't forced to one geometry.
-
-**Next — scale**
-
-- [ ] **ZeRO-3 via `deepspeed.zero.Init`** — sharded data-parallel currently cannot start on <80GB
-      cards, because each rank materializes all 66GB before partitioning. The largest single
-      throughput win available on 48GB hardware.
-- [ ] **Real batching** — H3's batch axis replicates one shared layout, so batching needs identical
-      geometry *and* caption length. Padding rows exist (tag `-1`, kept as a separate attention
-      document) but do not solve it on their own: the per-row tags and position ids are shared across
-      the batch, so items must agree on the layout, not merely on the length. Fixed-length captions
-      plus a shared bucket geometry would unlock it.
-- [ ] **Sequence parallelism** for 15s clips at 704p (~40k rows), which no single-GPU activation
-      budget covers.
-- [ ] **`torch.compile`** on the block stack, and caching the precomputable AdaLN branches (about a
-      third of the parameters) during training.
-
-**Later — surface**
-
-- [ ] Hub publishing with generated model cards
-- [ ] A ComfyUI node, so exported adapters have a first-class path to a UI
-- [ ] Characterise the quantization/quality trade-off: is int8 good enough to *evaluate* on, or only
-      to train against? (4-bit is documented as unusable for generation, but not measured.)
+- [ ] **Finish the IC-LoRA demonstration** — train a reference-conditioned adapter to convergence and
+      generate from a held-out reference. Everything else is secondary until this is done.
+- [ ] **Close the two known conditioning gaps** — a reference-free prompt embedding for the dropout
+      branch, and keyframe framing that matches the inference path.
+- [ ] **Ship configs for `a2v` and first+last-frame**, the two modes the schema already expresses.
 
 ---
 

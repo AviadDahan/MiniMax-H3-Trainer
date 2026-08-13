@@ -39,3 +39,22 @@ def test_the_pinned_diffusers_commit_is_the_same_everywhere():
 def test_diffusers_is_an_actual_dependency():
     """Without this line, installing the package yields an env that cannot import it."""
     assert "diffusers @ git+" in (ROOT / "pyproject.toml").read_text()
+
+
+def test_declared_entry_points_resolve():
+    """A console script pointing at a missing module installs fine and fails on use.
+
+    pyproject once declared `h3-train = h3_trainer.cli:train_main` against a module
+    that did not exist -- `pip install .` succeeded and the command raised
+    ModuleNotFoundError. The documented interface is `python scripts/train.py`.
+    """
+    import importlib
+    import tomllib
+
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        scripts = tomllib.load(handle).get("project", {}).get("scripts", {})
+
+    for name, target in scripts.items():
+        module_name, _, attribute = target.partition(":")
+        module = importlib.import_module(module_name)
+        assert hasattr(module, attribute), f"entry point {name} -> {target} does not resolve"

@@ -99,7 +99,7 @@ hub:
   hub_model_id: null
 wandb:
   enabled: false
-  project: h3-trainer
+  project: minimax-h3-trainer
   entity: null
   name: null
   tags:
