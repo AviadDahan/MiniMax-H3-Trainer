@@ -101,12 +101,20 @@ unrelated settings, same seed family, neither scene in the training set:
 <p align="center">
   <img src="docs/demo/character_ab_canal.webp" alt="base versus adapter, canal prompt" width="720">
 </p>
+<p align="center">
+  <video src="docs/demo/character_ab_canal.mp4" width="720" controls></video>
+  <br><sub><a href="docs/demo/character_ab_canal.mp4">canal A/B with sound</a></sub>
+</p>
 
 The same adapter in a scene the dataset never contained - the face carries over, the workshop does not
 come from the training clips:
 
 <p align="center">
   <img src="docs/demo/character_workshop.webp" alt="the same character in a workshop" width="480">
+</p>
+<p align="center">
+  <video src="docs/demo/character_workshop_lora.mp4" width="480" controls></video>
+  <br><sub><a href="docs/demo/character_workshop_lora.mp4">workshop with sound</a></sub>
 </p>
 
 **And it stays contained.** No trigger, base left, adapter right. A character LoRA that quietly
@@ -115,25 +123,13 @@ rewrites every *other* prompt is a broken one:
 <p align="center">
   <img src="docs/demo/character_ab_control.webp" alt="base versus adapter, untriggered control prompt" width="720">
 </p>
-
-**Turn the sound on.** The previews above are silent, and H3's whole point is that video and audio
-come out of one pass. These are the same three clips with their generated 32kHz stereo - if the
-players below do not appear, open them directly:
-[canal A/B](docs/demo/character_ab_canal.mp4) ·
-[workshop](docs/demo/character_workshop_lora.mp4) ·
-[untriggered control A/B](docs/demo/character_ab_control.mp4)
-
-<p align="center">
-  <video src="docs/demo/character_ab_canal.mp4" width="720" controls></video>
-</p>
-
-<p align="center">
-  <video src="docs/demo/character_workshop_lora.mp4" width="480" controls></video>
-</p>
-
 <p align="center">
   <video src="docs/demo/character_ab_control.mp4" width="720" controls></video>
+  <br><sub><a href="docs/demo/character_ab_control.mp4">control A/B with sound</a></sub>
 </p>
+
+Each pair above is a silent animated preview and the clip itself. **Play the clips** - H3 generates
+picture and 32kHz stereo in one pass, and a still cannot show half of what the adapter learned.
 
 Held-out video loss: 0.454 → 0.2675 (150) → 0.2415 (450) → 0.2430 (800) → **0.2356 (1200)**. Note the
 run looked converged from 450 to 800 and then improved again - one reason `plot_metrics.py` reports a
