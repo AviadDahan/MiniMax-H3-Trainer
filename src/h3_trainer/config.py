@@ -266,11 +266,18 @@ class OptimizationConfig(ConfigBaseModel):
 
 
 class AccelerationConfig(ConfigBaseModel):
-    strategy: Literal["ddp", "deepspeed_zero2", "deepspeed_zero3"] = Field(
+    strategy: Literal["ddp", "model_parallel", "deepspeed_zero2", "deepspeed_zero3"] = Field(
         default="ddp",
-        description="ddp replicates the whole transformer per GPU -- only viable with quantization on "
-        "48GB cards, but avoids all cross-GPU parameter traffic. deepspeed_zero3 shards the 66GB of "
-        "bf16 weights across ranks and is the fallback when the base model cannot be made to fit.",
+        description=(
+            "ddp: one full replica per GPU. Only viable with quantization on 48GB cards, but there is "
+            "no cross-GPU parameter traffic at all.\n"
+            "model_parallel: one process, bf16 weights split by transformer block across the GPUs "
+            "(~8GB/GPU on 8 cards) with the index-consuming heads pinned. Full precision on small "
+            "cards, at the cost of no data parallelism.\n"
+            "deepspeed_zero3: shards weights, gradients and optimizer state across ranks. Each rank "
+            "must be able to hold the model before partitioning, so it needs cards that fit 66GB "
+            "(80GB class) unless you add deepspeed.zero.Init."
+        ),
     )
     deepspeed_config: Path | None = Field(
         default=None,

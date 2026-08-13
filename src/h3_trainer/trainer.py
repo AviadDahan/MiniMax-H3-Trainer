@@ -171,15 +171,33 @@ class H3Trainer:
             config.acceleration.mixed_precision_mode
         ]
 
-        self.model = load_transformer(
-            config.model.model_path,
-            variant=config.model.variant,
-            dtype=dtype,
-            device=None if use_deepspeed else self.context.device,
-            quantization=config.acceleration.quantization,
-        )
-        if not use_deepspeed and config.acceleration.quantization == "none":
-            self.model = self.model.to(self.context.device)
+        model_parallel = config.acceleration.strategy == "model_parallel"
+        if model_parallel:
+            if self.context.distributed:
+                raise RuntimeError(
+                    "strategy: model_parallel runs a single process that owns every GPU -- launch it "
+                    "with plain `python scripts/train.py`, not torchrun/deepspeed."
+                )
+            from h3_trainer.model_loader import load_sharded_transformer
+
+            # One copy of the bf16 weights, split by transformer block across the
+            # visible GPUs. ~8GB/GPU on 8 cards, versus 66GB for a single replica.
+            self.model = load_sharded_transformer(
+                config.model.model_path,
+                variant=config.model.variant,
+                dtype=dtype,
+                primary=self.context.device.index or 0,
+            )
+        else:
+            self.model = load_transformer(
+                config.model.model_path,
+                variant=config.model.variant,
+                dtype=dtype,
+                device=None if use_deepspeed else self.context.device,
+                quantization=config.acceleration.quantization,
+            )
+            if not use_deepspeed and config.acceleration.quantization == "none":
+                self.model = self.model.to(self.context.device)
 
         if config.optimization.enable_gradient_checkpointing:
             enable_gradient_checkpointing(self.model, use_deepspeed)
@@ -214,7 +232,9 @@ class H3Trainer:
         self.optimizer = self._build_optimizer(parameters)
         self.scheduler = self._build_scheduler(self.optimizer)
 
-        if config.acceleration.strategy == "ddp" and self.context.distributed:
+        if model_parallel:
+            pass  # a single process already owns every device; nothing to wrap
+        elif config.acceleration.strategy == "ddp" and self.context.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.context.local_rank],

@@ -112,17 +112,27 @@ Every mode is the same strategy with different flags — see [docs/training-mode
 
 ## Hardware
 
-H3 is 33B — 66GB in bf16 — and the conditioner is another 63GB. On 80GB cards, ZeRO-3 with bf16
-weights is the straightforward choice. On 48GB cards (this repo was built on 8×A6000, no NVLink):
+H3 is 33B — 66GB in bf16 — and the conditioner is another 63GB. What actually works depends on your
+card size, and the answer on 48GB cards is not the obvious one. Measured on 8×A6000 (no NVLink):
 
-* **quantized base + DDP** (`nf4-bnb`, ~17GB/GPU) keeps full replicas and moves only LoRA gradients.
-  On a PCIe-only machine this is much faster than ZeRO-3, which all-gathers every layer's parameters
-  on every forward.
-* **ZeRO-3** shards the bf16 weights 8 ways (~8.3GB/GPU) and is exact; use it when fidelity matters
-  more than throughput.
+| strategy | per-GPU weights | works on 48GB? | notes |
+|---|---|---|---|
+| `model_parallel` | ~8GB (8 GPUs) | **yes** | one process, blocks split across GPUs, full bf16. No data parallelism; use gradient accumulation. |
+| `ddp` + `nf4-bnb` | ~18GB | yes | full replicas, only LoRA gradients cross the bus. But see the 4-bit warning below. |
+| `ddp` + `int8-quanto` | ~33GB | tight | little headroom for activations at real resolutions. |
+| `deepspeed_zero3` | ~8GB after partition | **no** | each rank must hold all 66GB *before* partitioning. Fine on 80GB cards. |
 
-Preprocessing and inference place the conditioner with `device_map="auto"` across whatever GPUs are
-visible; `scripts/generate.py --placement offload` falls back to host RAM for a single card.
+**4-bit is for training, not for looking at.** NF4 makes the model fit on one card, but quantizing
+H3's AdaLN modulation branches to 4 bits destroys generation — an NF4 sample here decoded to noise
+indistinguishable from decoding random latents. A LoRA can train against a quantized base; judge it
+against a bf16 one.
+
+For inference, `--placement shard` splits the transformer blocks across GPUs while pinning every
+module that touches the packed layout's index vectors to one device. A plain `device_map="auto"`
+fails here, because H3 uses those index vectors for `index_select` outside any accelerate hook.
+
+Preprocessing and inference place the conditioner with `device_map="auto"` and unload it before
+denoising starts, so peak memory is roughly `max(conditioner, transformer)` rather than their sum.
 
 ## The H3 quirks that matter
 

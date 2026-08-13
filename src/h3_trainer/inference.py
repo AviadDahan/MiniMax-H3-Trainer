@@ -113,10 +113,19 @@ class H3Pipeline:
     # ------------------------------------------------------- stage 1: condition
 
     def encode_conditioning(self, request: GenerationRequest) -> Conditioning:
-        """Run the conditioner (and, for references, the VAEs) and then unload them."""
+        """Condition a single request (loads and unloads the conditioner)."""
+        return self.encode_conditioning_batch([request])[0]
+
+    def encode_conditioning_batch(self, requests: list[GenerationRequest]) -> list[Conditioning]:
+        """Condition many requests on one load of the conditioner.
+
+        Loading Qwen3-VL-32B takes minutes, so doing it per clip turns a dataset
+        generation run into hours of loading. Everything needing the conditioner
+        therefore happens in one pass, before any denoising starts.
+        """
         from h3_trainer.preprocessing.encoders import H3Encoders
 
-        needs_vae = request.uses_references
+        needs_vae = any(request.uses_references for request in requests)
         encoders = H3Encoders(
             self.model_path,
             device=self.device,
@@ -125,24 +134,29 @@ class H3Pipeline:
             need_text=True,
             text_device_map=self._conditioner_device_map(),
         )
+        results: list[Conditioning] = []
         try:
-            if request.uses_references:
-                conditioning = self._encode_reference_conditioning(encoders, request)
-            else:
-                keyframes = self._load_keyframes(request)
-                embeds, tags = encoders.encode_prompt(request.prompt, keyframes or None)
-                conditioning = Conditioning(
-                    prompt_embeds=embeds, text_token_tags=tags, keyframes=keyframes
+            for index, request in enumerate(requests):
+                if request.uses_references:
+                    conditioning = self._encode_reference_conditioning(encoders, request)
+                else:
+                    keyframes = self._load_keyframes(request)
+                    embeds, tags = encoders.encode_prompt(request.prompt, keyframes or None)
+                    conditioning = Conditioning(
+                        prompt_embeds=embeds, text_token_tags=tags, keyframes=keyframes
+                    )
+                logger.info(
+                    "[%d/%d] conditioned: %d text rows (%d tagged as vision)",
+                    index + 1,
+                    len(requests),
+                    conditioning.prompt_embeds.shape[0],
+                    int((conditioning.text_token_tags == 0).sum()),
                 )
+                results.append(conditioning)
         finally:
             encoders.unload()
             torch.cuda.empty_cache()
-        logger.info(
-            "Conditioned: %d text rows (%d tagged as vision)",
-            conditioning.prompt_embeds.shape[0],
-            int((conditioning.text_token_tags == 0).sum()),
-        )
-        return conditioning
+        return results
 
     def _conditioner_device_map(self) -> str | dict:
         """Spread the conditioner, but keep it off the denoising GPU when possible.
@@ -259,10 +273,12 @@ class H3Pipeline:
             if self.variant == "ref2va"
             else blocks_module.MiniMaxH3Blocks()
         )
-        # Drop the blocks whose work stage 1 already did; their outputs are passed
-        # in as inputs instead. Dropping them is also what keeps the 63GB
-        # conditioner out of this half of the run.
-        skip = {"text_encoder", "reference_encoder"}
+        # Drop only the text encoder: that is the 63GB component stage 1 replaced,
+        # and its outputs (prompt_embeds, text_token_tags) are passed in instead.
+        # The reference encoder stays -- it needs the VAEs, which are resident
+        # here anyway, and it is what fills in each reference's latent geometry
+        # before the layout is built.
+        skip = {"text_encoder"}
         trimmed = SequentialPipelineBlocks.from_blocks_dict(
             {name: block for name, block in full.sub_blocks.items() if name not in skip}
         )
@@ -282,7 +298,7 @@ class H3Pipeline:
             )
             if self.quantization.endswith("-quanto"):
                 transformer = transformer.to(self.device)
-            pipeline.update_components(transformer=transformer)
+            pipeline.update_components(**{self.transformer_component: transformer})
         elif self.placement == "shard":
             from h3_trainer.model_loader import load_sharded_transformer
 
@@ -290,7 +306,7 @@ class H3Pipeline:
             transformer = load_sharded_transformer(
                 self.model_path, variant=self.variant, dtype=self.dtype, primary=primary
             )
-            pipeline.update_components(transformer=transformer)
+            pipeline.update_components(**{self.transformer_component: transformer})
         else:
             from h3_trainer.model_loader import load_transformer
 
@@ -298,13 +314,33 @@ class H3Pipeline:
             transformer = load_transformer(
                 self.model_path, variant=self.variant, dtype=self.dtype, device=device
             )
-            pipeline.update_components(transformer=transformer)
+            pipeline.update_components(**{self.transformer_component: transformer})
 
         self.pipeline = pipeline
+        if self.transformer is None:
+            raise RuntimeError(
+                f"The transformer was not registered as {self.transformer_component!r}; the blocks "
+                f"expect one of {pipeline.component_names}."
+            )
         self._report_placement()
         if self._adapter is not None:
             self._apply_adapter(*self._adapter)
         return self
+
+    @property
+    def transformer_component(self) -> str:
+        """What the blocks call the transformer.
+
+        The Ref2VA blocks register it as ``transformer_ref``, not ``transformer``.
+        Registering under the wrong name is silently accepted and leaves the
+        component unset -- which surfaces much later as "NoneType is not
+        callable" inside the denoise loop.
+        """
+        return "transformer_ref" if self.variant == "ref2va" else "transformer"
+
+    @property
+    def transformer(self):
+        return getattr(self.pipeline, self.transformer_component, None)
 
     @property
     def transformer_device(self) -> torch.device:
@@ -314,15 +350,15 @@ class H3Pipeline:
         input/output projections and therefore the one the index vectors are
         selected against -- not wherever ``next(parameters())`` happens to live.
         """
-        if self.pipeline is None or getattr(self.pipeline, "transformer", None) is None:
+        transformer = self.transformer
+        if transformer is None:
             return torch.device(self.device)
-        transformer = self.pipeline.transformer
         if self.placement == "shard":
             return next(transformer.proj_in.parameters()).device
         return next(transformer.parameters()).device
 
     def _report_placement(self) -> None:
-        for name in ("transformer", "vae", "audio_vae"):
+        for name in (self.transformer_component, "vae", "audio_vae"):
             component = getattr(self.pipeline, name, None)
             if component is None or not hasattr(component, "parameters"):
                 continue
@@ -357,7 +393,7 @@ class H3Pipeline:
 
         rank = max(weights[key].shape[0] for key in lora_keys)
         targets = sorted({_target_suffix(key) for key in lora_keys})
-        transformer = self.pipeline.transformer
+        transformer = self.transformer
         transformer.add_adapter(
             LoraConfig(
                 r=rank,
@@ -377,7 +413,13 @@ class H3Pipeline:
 
     @torch.no_grad()
     def generate(self, request: GenerationRequest, output_path: str | Path) -> Path:
-        conditioning = self.encode_conditioning(request)
+        return self.generate_prepared(request, self.encode_conditioning(request), output_path)
+
+    @torch.no_grad()
+    def generate_prepared(
+        self, request: GenerationRequest, conditioning: Conditioning, output_path: str | Path
+    ) -> Path:
+        """Denoise a request whose conditioning was computed earlier."""
         if self.pipeline is None:
             self.load()
 
@@ -393,12 +435,14 @@ class H3Pipeline:
         }
         if conditioning.keyframes:
             kwargs["keyframes"] = conditioning.keyframes
-        if conditioning.prepared_references:
-            kwargs["prepared_references"] = conditioning.prepared_references
-            if conditioning.condition_latents is not None:
-                kwargs["condition_latents"] = conditioning.condition_latents.to(device, self.dtype)
-            if conditioning.audio_condition_latents is not None:
-                kwargs["audio_condition_latents"] = conditioning.audio_condition_latents.to(device, self.dtype)
+        if request.uses_references:
+            # The pipeline's own reference encoder re-derives the latents and,
+            # crucially, the latent geometry the packed layout is built from.
+            # Stage 1 only needed the references to build the *prompt*
+            # presentation, so the raw descriptors are what to pass here.
+            from diffusers.modular_pipelines.minimax_h3.packing_ref2va import MiniMaxH3Reference
+
+            kwargs["references"] = [MiniMaxH3Reference(**entry) for entry in request.references]
 
         logger.info(
             "Denoising %s, %d steps, seed %d: %s",
