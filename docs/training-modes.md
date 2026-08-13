@@ -1,0 +1,119 @@
+# Training modes
+
+There is one strategy, `flexible`. Every mode below is that strategy with different flags — no mode
+has its own code path. Adding a mode should mean writing a YAML file.
+
+Two questions are asked per modality:
+
+1. **Is it generated?** `is_generated: true` → the modality is noised, predicted, and in the loss.
+   `false` → it is packed clean (sigma = 0, t = 1) as frozen conditioning and excluded from the loss.
+2. **What conditions ride in front of it?** Keyframes (`first_frame`, `last_frame`) or in-context
+   `reference` blocks.
+
+```
+[ text | conditioning blocks | target audio | target video ]
+```
+
+## Quick reference
+
+| mode | config | video | audio | conditions | variant |
+|---|---|---|---|---|---|
+| text → video+audio | [`t2va_lora.yaml`](../configs/t2va_lora.yaml) | generated | generated | — | fl2va |
+| text → video+audio (48GB) | [`t2va_lora_low_vram.yaml`](../configs/t2va_lora_low_vram.yaml) | generated | generated | — | fl2va |
+| image → video+audio | [`i2v_lora.yaml`](../configs/i2v_lora.yaml) | generated | generated | `first_frame` | fl2va |
+| first+last → video | — | generated | generated | `first_frame`, `last_frame` | fl2va |
+| video → audio | [`v2a_lora.yaml`](../configs/v2a_lora.yaml) | **frozen** | generated | — | fl2va |
+| audio → video | — | generated | **frozen** | — | fl2va |
+| IC-LoRA (reference) | [`ref2va_ic_lora.yaml`](../configs/ref2va_ic_lora.yaml) | generated | generated | `reference` | **ref2va** |
+
+## Text to video + audio
+
+The baseline. Both modalities are generated, so the adapter learns the joint distribution H3 actually
+produces — including what the scene *sounds* like.
+
+```yaml
+training_strategy:
+  name: flexible
+  video: { is_generated: true, latents_dir: latents }
+  audio: { is_generated: true, latents_dir: audio_latents }
+```
+
+## Image to video (first-frame conditioning)
+
+```yaml
+video:
+  is_generated: true
+  conditions:
+    - type: first_frame
+      latents_dir: first_frame_latents
+      probability: 0.9
+```
+
+Preprocess with `--keyframes first_frame`. That does two things: encodes the keyframe with the
+inference conditioning recipe (sampled posterior, seed 42, float16 round-trip), and puts its
+`"<Picture 1>: "` label plus vision block into the prompt presentation, tagged as video rows.
+
+`probability` below 1.0 leaves a slice of unconditioned steps so the adapter does not forget how to
+generate from text alone. `last_frame` works identically and can be combined.
+
+## Video to audio / audio to video
+
+Flip `is_generated` on the modality you want frozen:
+
+```yaml
+video: { is_generated: false, latents_dir: latents }     # clean, no loss
+audio: { is_generated: true,  latents_dir: audio_latents }
+```
+
+The frozen modality is packed at sigma = 0 and masked out of the loss, so the model learns to produce
+one modality *given* the other. Useful for foley, dialogue replacement, or driving video from a voice
+track.
+
+## IC-LoRA (in-context reference conditioning)
+
+This is the mode nothing else trains today. It requires `model.variant: ref2va` — the FL2VA
+transformer has no reference rows in its layout.
+
+```yaml
+model:
+  variant: ref2va
+training_strategy:
+  video:
+    is_generated: true
+    conditions:
+      - type: reference
+        modality: video          # image | video | audio
+        latents_dir: reference_latents
+        probability: 0.9
+```
+
+Preprocess with `--references` and a `reference_image` / `reference_video` / `reference_audio` column.
+
+What happens at training time:
+
+* reference latents are packed as blocks between the text and the targets, in request order;
+* a video reference's soundtrack rows are packed immediately *before* its video rows and share their
+  rotary origin, exactly as generated audio and video do;
+* visual reference rows are noise-augmented to `t = 0.999`, reference audio rows are passed clean at
+  `t = 1.0`;
+* reference rows attend bidirectionally with everything else and are masked out of the loss;
+* the prompt presentation includes each reference's label and vision block, with those rows tagged as
+  video.
+
+H3 accepts up to 9 image, 3 video and 3 audio references per request. An audio reference cannot stand
+alone — it needs at least one visual reference or the prompt to anchor the generation.
+
+**Reference dropout matters here.** With `probability: 1.0` the adapter only ever sees a reference and
+loses the unconditioned path; 0.8–0.9 keeps both alive.
+
+## Batching
+
+H3's batch axis is a pure replication axis over *one shared layout*: `position_ids`, `token_tags` and
+the index vectors are shared across the batch. Only samples with identical row counts — including
+caption length — can share a micro-batch, which natural captions rarely do.
+
+`BucketBatchSampler` groups samples by `(video_rows, audio_rows, text_rows, has_audio)` and shuffles
+within and across buckets each epoch. In practice `batch_size: 1` with
+`gradient_accumulation_steps: N` is the reliable way to get an effective batch of N; there is no
+padding path, because H3 exposes no attention mask over the packed sequence and padding rows would be
+attended to as content.

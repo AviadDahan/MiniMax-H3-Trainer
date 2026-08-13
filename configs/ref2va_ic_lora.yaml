@@ -1,0 +1,117 @@
+# =============================================================================
+# MiniMax-H3 in-context LoRA (IC-LoRA) on the Ref2VA transformer
+# =============================================================================
+#
+# In-context conditioning: pre-encoded reference latents are concatenated into
+# the packed sequence ahead of the targets, as
+#
+#     [ text | reference blocks | target audio | target video ]
+#
+# Reference rows take part in self-attention in both directions, are pinned at
+# their conditioning timestep (visual rows at t=0.999, audio references clean at
+# t=1.0) and carry no loss. The model learns to carry identity, voice, motion or
+# style from the reference into the generation.
+#
+# This requires variant: ref2va -- the FL2VA transformer has no reference rows in
+# its layout. Preprocess with --references so the reference media are encoded and
+# the prompt presentation includes their labelled vision blocks.
+#
+#   python scripts/process_dataset.py dataset.json --references ...
+#   deepspeed --num_gpus 8 scripts/train.py configs/ref2va_ic_lora.yaml
+# =============================================================================
+
+model:
+  model_path: /data/aviad/models/MiniMax-H3
+  variant: ref2va
+  training_mode: lora
+  load_checkpoint: null
+lora:
+  rank: 32
+  alpha: 32
+  dropout: 0.0
+  target_modules:
+  - to_q
+  - to_k
+  - to_v
+  - to_out.0
+training_strategy:
+  name: flexible
+  video:
+    is_generated: true
+    latents_dir: latents
+    conditions:
+    - type: reference
+      modality: video
+      latents_dir: reference_latents
+      probability: 0.9
+  audio:
+    is_generated: true
+    latents_dir: audio_latents
+    conditions: []
+optimization:
+  learning_rate: 0.0002
+  steps: 3000
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  optimizer_type: adamw
+  scheduler_type: linear
+  warmup_steps: 50
+  enable_gradient_checkpointing: true
+  max_seq_tokens: 70000
+acceleration:
+  strategy: deepspeed_zero3
+  mixed_precision_mode: bf16
+  quantization: none
+  offload_optimizer_during_validation: false
+data:
+  preprocessed_data_root: /data/aviad/datasets/character/.precomputed
+  num_dataloader_workers: 2
+  val_split_every: 20
+  shuffle: true
+validation:
+  samples:
+  - prompt: The same character, now walking through a night market lit by paper lanterns, speaking softly.
+    conditions:
+    - type: reference
+      video: /path/to/reference_clip.mp4
+  video_dims:
+  - 704
+  - 704
+  - 124
+  frame_rate: 24.0
+  seed: 42
+  inference_steps: 30
+  interval: 250
+  sample_media: true
+  loss_sigmas:
+  - 0.3
+  - 0.6
+  - 0.9
+  max_loss_samples: 8
+  skip_initial_validation: false
+checkpoints:
+  interval: 250
+  keep_last_n: 5
+  precision: bfloat16
+  save_training_state: full
+flow_matching:
+  timestep_sampling_mode: uniform
+  timestep_sampling_params: {}
+  video_shift: 12.0
+  audio_shift: 3.0
+hub:
+  push_to_hub: false
+  hub_model_id: null
+wandb:
+  enabled: false
+  project: h3-trainer
+  entity: null
+  name: null
+  tags:
+  - h3
+  - ic-lora
+  - ref2va
+  log_validation_videos: true
+seed: 42
+output_dir: /data/aviad/runs/ref2va_ic_lora

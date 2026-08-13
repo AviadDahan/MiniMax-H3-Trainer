@@ -1,0 +1,115 @@
+# =============================================================================
+# MiniMax-H3 text-to-video+audio LoRA -- one GPU per replica, quantized base
+# =============================================================================
+#
+# H3 is 33B: 66GB in bf16, which does not fit on a 48GB card. This config keeps
+# a full replica per GPU and quantizes the *frozen* base to NF4 (~17GB) instead
+# of sharding it. The LoRA itself stays in bf16, so nothing being learned is
+# quantized -- only the weights it sits on top of.
+#
+# Why prefer this to ZeRO-3 on a machine without NVLink: ZeRO-3 all-gathers every
+# layer's parameters on every forward, over PCIe. DDP with quantized replicas
+# moves only LoRA gradients (megabytes).
+#
+# The trade-off is fidelity: an NF4 base shifts the output distribution slightly,
+# so an adapter trained here is very marginally off-recipe against a bf16 base.
+# For style/character work that is well inside the noise; for anything precision
+# critical use configs/t2va_lora.yaml with ZeRO-3.
+#
+#   torchrun --nproc_per_node 8 scripts/train.py configs/t2va_lora_low_vram.yaml
+# =============================================================================
+
+model:
+  model_path: /data/aviad/models/MiniMax-H3
+  variant: fl2va
+  training_mode: lora
+  load_checkpoint: null
+lora:
+  rank: 16
+  alpha: 16
+  dropout: 0.0
+  target_modules:
+  - to_q
+  - to_k
+  - to_v
+  - to_out.0
+training_strategy:
+  name: flexible
+  video:
+    is_generated: true
+    latents_dir: latents
+    conditions: []
+  audio:
+    is_generated: true
+    latents_dir: audio_latents
+    conditions: []
+optimization:
+  learning_rate: 0.0001
+  steps: 2000
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  optimizer_type: adamw
+  scheduler_type: linear
+  warmup_steps: 50
+  enable_gradient_checkpointing: true
+  max_seq_tokens: 24000
+acceleration:
+  strategy: ddp
+  mixed_precision_mode: bf16
+  quantization: nf4-bnb
+  offload_optimizer_during_validation: true
+data:
+  preprocessed_data_root: /data/aviad/datasets/character/.precomputed
+  num_dataloader_workers: 2
+  val_split_every: 20
+  shuffle: true
+validation:
+  samples:
+  - prompt: A woman with long brown hair sits at a wooden desk in a home office, typing on a laptop while
+      soft afternoon light falls through the window beside her. The audio carries the click of keys, the
+      rustle of paper and faint birdsong from outside.
+  - prompt: A chef in a white jacket plates a dish in a busy restaurant kitchen, steam rising from the
+      pan behind him. The audio has sizzling, the clink of metal on porcelain and the low hum of extraction
+      fans.
+  video_dims:
+  - 512
+  - 512
+  - 124
+  frame_rate: 24.0
+  seed: 42
+  inference_steps: 30
+  interval: 250
+  sample_media: false
+  loss_sigmas:
+  - 0.3
+  - 0.6
+  - 0.9
+  max_loss_samples: 8
+  skip_initial_validation: false
+checkpoints:
+  interval: 250
+  keep_last_n: 5
+  precision: bfloat16
+  save_training_state: full
+flow_matching:
+  timestep_sampling_mode: uniform
+  timestep_sampling_params: {}
+  video_shift: 12.0
+  audio_shift: 3.0
+hub:
+  push_to_hub: false
+  hub_model_id: null
+wandb:
+  enabled: false
+  project: h3-trainer
+  entity: null
+  name: null
+  tags:
+  - h3
+  - lora
+  - t2va
+  - low-vram
+  log_validation_videos: true
+seed: 42
+output_dir: /data/aviad/runs/t2va_lora_low_vram

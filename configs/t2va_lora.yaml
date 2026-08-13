@@ -1,0 +1,139 @@
+# =============================================================================
+# MiniMax-H3 text-to-video+audio LoRA
+# =============================================================================
+#
+# The baseline recipe: train a LoRA on the FL2VA transformer so the model learns
+# a style, subject or voice from captions alone. Video and audio are both
+# generated, so the adapter learns the joint distribution H3 actually produces.
+#
+# Preprocess first:
+#   python scripts/process_dataset.py dataset.json \
+#       --model-path /data/aviad/models/MiniMax-H3 --resolution-bucket 704x704x107
+#
+# Run (8 GPUs, bf16 weights sharded with ZeRO-3):
+#   deepspeed --num_gpus 8 scripts/train.py configs/t2va_lora.yaml
+#
+# On cards smaller than 80GB, prefer configs/t2va_lora_low_vram.yaml -- it keeps
+# full replicas and quantizes the frozen base instead of sharding it.
+# =============================================================================
+
+model:
+  # Local diffusers-layout MiniMax-H3 directory (scripts/download_model.sh).
+  model_path: /data/aviad/models/MiniMax-H3
+  # fl2va -> subfolder "transformer": text, first-frame and first+last-frame tasks.
+  # ref2va -> subfolder "transformer_ref": omni-reference (see ref2va_ic_lora.yaml).
+  variant: fl2va
+  training_mode: lora
+  load_checkpoint: null
+
+lora:
+  # 16 is a good default for a style or character adapter; the fal H3 sweep found
+  # rank 16 beat 32 and 64 for a realism adapter, and lower rank overfits less on
+  # small datasets.
+  rank: 16
+  alpha: 16
+  # Must stay 0 while gradient checkpointing is on: the recomputed forward has to
+  # match the original one exactly.
+  dropout: 0.0
+  # Real module names in the H3 diffusers checkpoint. NOT "to_qkv"/"linear_1" --
+  # those come from the original MiniMax packaging and match nothing here, which
+  # PEFT would silently ignore. Add "ff.net.0.proj" and "ff.net.2" for more capacity.
+  target_modules:
+    - to_q
+    - to_k
+    - to_v
+    - to_out.0
+
+training_strategy:
+  name: flexible
+  video:
+    is_generated: true
+    latents_dir: latents
+    conditions: []
+  audio:
+    is_generated: true
+    latents_dir: audio_latents
+    conditions: []
+
+optimization:
+  learning_rate: 1.0e-4
+  steps: 2000
+  # H3's batch axis replicates one shared packed layout, so only samples with
+  # identical geometry *and* caption length can share a batch. Scale the effective
+  # batch with gradient_accumulation_steps instead.
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  optimizer_type: adamw
+  scheduler_type: linear
+  warmup_steps: 50
+  enable_gradient_checkpointing: true
+  # Pre-flight gate: samples packing to more rows than this are skipped before the
+  # forward pass. 704x704x107 packs to ~16k rows, so this leaves plenty of headroom.
+  max_seq_tokens: 70000
+
+acceleration:
+  strategy: deepspeed_zero3
+  mixed_precision_mode: bf16
+  quantization: none
+  offload_optimizer_during_validation: false
+
+data:
+  preprocessed_data_root: /data/aviad/datasets/character/.precomputed
+  num_dataloader_workers: 2
+  # md5(id) % 20 == 0 -> validation (~5%). Hash-based so the split survives
+  # adding or reordering samples.
+  val_split_every: 20
+  shuffle: true
+
+validation:
+  # No negative prompt and no CFG scale: H3 is guidance-distilled, so each
+  # denoising step is a single forward pass. Audio is always generated jointly.
+  samples:
+    - prompt: >-
+        A woman with long brown hair sits at a wooden desk in a home office, typing on a laptop
+        while soft afternoon light falls through the window beside her. The audio carries the
+        click of keys, the rustle of paper and faint birdsong from outside.
+    - prompt: >-
+        A chef in a white jacket plates a dish in a busy restaurant kitchen, steam rising from the
+        pan behind him. The audio has sizzling, the clink of metal on porcelain and the low hum of
+        extraction fans.
+  video_dims: [704, 704, 124]
+  frame_rate: 24.0
+  seed: 42
+  inference_steps: 30
+  interval: 250
+  sample_media: true
+  loss_sigmas: [0.3, 0.6, 0.9]
+  max_loss_samples: 8
+  skip_initial_validation: false
+
+checkpoints:
+  interval: 250
+  keep_last_n: 5
+  precision: bfloat16
+  save_training_state: full
+
+flow_matching:
+  timestep_sampling_mode: uniform
+  timestep_sampling_params: {}
+  # H3 noises video and audio on two different shifted schedules driven by one
+  # uniform draw. These are the shipped values; changing them desynchronizes
+  # training from the inference schedulers.
+  video_shift: 12.0
+  audio_shift: 3.0
+
+hub:
+  push_to_hub: false
+  hub_model_id: null
+
+wandb:
+  enabled: false
+  project: h3-trainer
+  entity: null
+  name: null
+  tags: [h3, lora, t2va]
+  log_validation_videos: true
+
+seed: 42
+output_dir: /data/aviad/runs/t2va_lora

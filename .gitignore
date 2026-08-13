@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Never commit weights, caches, datasets or run outputs.
+*.safetensors
+*.pt
+*.mp4
+*.wav
+.precomputed/
+outputs/
+runs/
+wandb/
