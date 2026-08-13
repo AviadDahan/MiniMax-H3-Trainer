@@ -61,8 +61,8 @@ and `h3-lora-run`.
 - Train **LoRA** adapters on H3 - character, style, image-to-video, video-to-audio. Demonstrated
   end to end below.
 - Train **IC-LoRA** adapters, where a reference image/video/audio is packed *in-context* into the
-  sequence - the one thing no other public H3 trainer implements. 🚧 **Under construction**, see
-  [IC-LoRA](#-ic-lora).
+  sequence - the one thing no other public H3 trainer implements. Demonstrated on skeleton-to-video,
+  see [IC-LoRA](#-ic-lora-structural-control).
 - Configs, ergonomics and CLI shaped after LTX-2's `ltx-trainer`; numerics shaped after H3, which
   differs from ordinary flow matching in ways that silently corrupt weights.
 - **Built to be driven by an agent.** Unknown config keys fail at load rather than six hours in;
@@ -154,7 +154,7 @@ trainer, and the diffusers integration is inference-only. This is the trainer.
 | | |
 |---|---|
 | **training modes** | t2va, i2v/fl2va and v2a from one `flexible` strategy; a2v and first+last-frame are expressible in the same schema but ship no config and have never been run |
-| **reference conditioning** ⚠️ | reference image/video/audio packed in-context and masked from the loss - 🚧 under construction, see [IC-LoRA](#-ic-lora) |
+| **reference conditioning** | reference image/video/audio packed in-context and masked from the loss; skeleton control [demonstrated](#-ic-lora-structural-control) |
 | **prompt vision blocks** | keyframes and references appear in the conditioner's presentation, tagged as video |
 | **configuration** | YAML, validated - unknown keys fail at load, not six hours in |
 | **data** | offline two-pass latent cache; VAE round-trip verification built in |
@@ -235,7 +235,8 @@ python scripts/train.py configs/t2va_lora.yaml --set optimization.steps=2000 lor
 | character AV (48GB) | [`character_av_lora.yaml`](configs/character_av_lora.yaml) | bf16 `model_parallel` |
 | image → video | [`i2v_lora.yaml`](configs/i2v_lora.yaml) | `first_frame` condition |
 | video → audio | [`v2a_lora.yaml`](configs/v2a_lora.yaml) | `video.is_generated: false` |
-| **IC-LoRA** ⚠️ | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` - 🚧 under construction, see [IC-LoRA](#-ic-lora) |
+| **IC-LoRA** | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` |
+| structural control | [`pose_ic_lora.yaml`](configs/pose_ic_lora.yaml) | skeleton video as the reference |
 | low VRAM | [`t2va_lora_low_vram.yaml`](configs/t2va_lora_low_vram.yaml) | NF4 base, DDP replicas |
 
 Watch `loss_video` and `loss_audio` **separately**. A healthy total hiding a flat audio term is the
@@ -350,10 +351,44 @@ as unusable for generation.
 
 ---
 
-## 🚧 IC-LoRA
+## 🕺 IC-LoRA: structural control
 
-**Under construction.** In-context reference conditioning trains, but it has not been demonstrated
-end to end yet. Treat it as experimental.
+H3 ships no ControlNet and no pose, depth or edge input. IC-LoRA is how you add one: render the
+control signal as a video, pack it into the sequence as an in-context reference, and train an adapter
+to follow it. **Nothing else public trains this on H3.**
+
+Trained on 92 skeleton/footage pairs at 320x576x124, rank 32. The reference below is a **held-out**
+clip that was never encoded, so following it cannot be memorization:
+
+<p align="center">
+  <img src="docs/demo/iclora_skeleton_following.png" alt="skeleton, then generations at step 150 and step 300" width="540">
+</p>
+
+<sub>Top: the held-out skeleton. Middle: generated at step 150. Bottom: step 300. Same reference, same
+seed.</sub>
+
+**The control that makes it evidence.** Give the *base* model the same skeleton and the same seed with
+no adapter, and it reproduces the skeleton rather than generating anything from it. The adapter is
+what converts a reference from something to copy into something to obey:
+
+<p align="center">
+  <img src="docs/demo/iclora_base_vs_adapter.png" alt="base reproduces the skeleton, adapter generates a person following it" width="540">
+</p>
+
+<sub>Left: base model, same reference and seed. Right: with the adapter.</sub>
+
+Held-out video loss 0.5079 → 0.2607 by step 150, with the largest gain at high sigma, where the
+reference carries most of the usable signal.
+
+**What this is not.** The adapter itself is **not published**: it was trained on scraped short-form
+video whose subjects did not consent to being training data, which our own
+[ethics section](#ethical-considerations) rules out. What ships here is the pipeline and the evidence.
+Output is soft because 320x576 is well below H3's native 768 short edge, a throughput choice
+(a reference costs as many rows as the target, and attention is quadratic), not an adapter limitation.
+
+Reproduce it with [`scripts/extract_pose.py`](scripts/extract_pose.py) and
+[`configs/pose_ic_lora.yaml`](configs/pose_ic_lora.yaml); see
+[docs/training-modes.md](docs/training-modes.md#structural-control-pose-depth-edges).
 
 ---
 
@@ -366,7 +401,7 @@ What has actually been measured on this hardware, not claims:
 | VAE round-trip (video) | 22.8 dB PSNR on a hard synthetic pattern; colour, geometry and motion intact |
 | VAE round-trip (audio) | dominant frequency preserved (439.5 Hz), 0.82 waveform correlation |
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
-| IC-LoRA packing ⚠️ | a reference image contributes 4,096 rows to an 8,741-row sequence, loss over the 448 target rows only - packing only; **no conditioned generation yet** |
+| IC-LoRA, skeleton control | 92 pairs, 320x576: generations follow a **held-out** skeleton, while the base model given the same reference reproduces it instead. Held-out loss 0.5079 → 0.2607 by step 150 |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
 | Unit tests | 52 passing, `ruff` clean |
@@ -377,8 +412,9 @@ What has actually been measured on this hardware, not claims:
 
 Deliberately short. This is a trainer, not a platform.
 
-- [ ] **Finish the IC-LoRA demonstration** - train a reference-conditioned adapter to convergence and
-      generate from a held-out reference. Everything else is secondary until this is done.
+- [x] **IC-LoRA demonstrated** - skeleton control, generating from a held-out reference.
+- [ ] **A publishable adapter** - the demonstrated one trained on scraped video and is deliberately
+      not released; retrain on synthetic or consented footage and publish the weights.
 - [ ] **Close the two known conditioning gaps** - a reference-free prompt embedding for the dropout
       branch, and keyframe framing that matches the inference path.
 - [ ] **Ship configs for `a2v` and first+last-frame**, the two modes the schema already expresses.

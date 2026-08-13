@@ -26,8 +26,14 @@
 # decision rather than a quality one. A reference costs as many rows as the
 # target, and attention over the packed sequence is unmasked and quadratic:
 # 448x768x124 with a reference measured 27,364 rows at ~82 s/step on 4 A6000s,
-# where 320x576x124 comes in near 15.8k rows. Frames cannot be traded away
-# instead -- H3 generates 124 frames (5.17 s) at the short end.
+# where 320x576x124 measures 14,884 rows at ~24-37 s/step. Frames cannot be
+# traded away instead -- H3 generates 124 frames (5.17 s) at the short end.
+#
+# A sharper bucket is the planned next run, and it is worth budgeting honestly:
+# 448x768 is ~3.4x the step time, so 600 steps goes from roughly 5 hours to
+# nearly 14. Output softness at 320x576 is mostly this choice, not the adapter --
+# H3's own canvas is 768 on the short edge, so generating below it is off
+# distribution for the base model too.
 #
 # Data comes from scripts/extract_pose.py, which renders MediaPipe skeletons
 # frame-aligned with their source clips and rejects anything not showing a full
