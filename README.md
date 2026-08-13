@@ -60,29 +60,32 @@ unrelated settings, same seed family, neither scene in the training set:
 
 ![anchor beside two generations](docs/demo/character_identity.png)
 
-**With sound on.** H3 generates video and audio in one pass, so a contact sheet is half the evidence.
-Every clip below carries its generated 32kHz stereo soundtrack.
-
-Same prompt, same seed — **base on the left, adapter on the right**. The trigger `OHWXMIRA` turns a
-canal landscape into the character, speaking:
+**The trigger does the work.** Same prompt, same seed — **base on the left, adapter on the right**.
+`OHWXMIRA` turns a canal landscape into the character, speaking:
 
 <p align="center">
-  <video src="docs/demo/character_ab_canal.mp4" width="720" controls></video>
+  <img src="docs/demo/character_ab_canal.webp" alt="base versus adapter, canal prompt" width="720">
 </p>
 
-The same adapter in an unrelated scene, from a prompt whose setting appears nowhere in the training
-data — the face and voice carry over, the workshop does not come from the dataset:
+The same adapter in a scene the dataset never contained — the face carries over, the workshop does not
+come from the training clips:
 
 <p align="center">
-  <video src="docs/demo/character_workshop_lora.mp4" width="720" controls></video>
+  <img src="docs/demo/character_workshop.webp" alt="the same character in a workshop" width="480">
 </p>
 
-And the containment check: **no trigger, base left, adapter right.** A character LoRA that quietly
-rewrites every other prompt is a broken one:
+**And it stays contained.** No trigger, base left, adapter right. A character LoRA that quietly
+rewrites every *other* prompt is a broken one:
 
 <p align="center">
-  <video src="docs/demo/character_ab_control.mp4" width="720" controls></video>
+  <img src="docs/demo/character_ab_control.webp" alt="base versus adapter, untriggered control prompt" width="720">
 </p>
+
+**Turn the sound on.** The previews above are silent, and H3's whole point is that video and audio come
+out of one pass. The mp4s carry the generated 32kHz stereo:
+[canal A/B](docs/demo/character_ab_canal.mp4) ·
+[workshop](docs/demo/character_workshop_lora.mp4) ·
+[untriggered control A/B](docs/demo/character_ab_control.mp4)
 
 Held-out video loss: 0.454 → 0.2675 (150) → 0.2415 (450) → 0.2430 (800) → **0.2356 (1200)**. Note the
 run looked converged from 450 to 800 and then improved again — one reason `plot_metrics.py` reports a
