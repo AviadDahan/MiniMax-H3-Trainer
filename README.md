@@ -27,9 +27,12 @@
 
 ## ⚡ TL;DR
 
-- Train **LoRA** adapters on H3 — character, style, voice, image-to-video, video-to-audio.
+- Train **LoRA** adapters on H3 — character, style, image-to-video, video-to-audio. Demonstrated
+  end to end below.
 - Train **IC-LoRA** adapters, where a reference image/video/audio is packed *in-context* into the
-  sequence. **Nothing else public trains this on H3.**
+  sequence — the one thing no other public H3 trainer implements. ⚠️ **Experimental**: the packing is
+  verified and it trains, but no adapter has yet been trained to convergence and generated from. See
+  [status](#ic-lora-status).
 - Configs, ergonomics and CLI shaped after LTX-2's `ltx-trainer`; numerics shaped after H3, which
   differs from ordinary flow matching in ways that silently corrupt weights.
 - Runs on **48GB cards** — the 66GB bf16 transformer is split across GPUs in one process, no
@@ -120,16 +123,16 @@ trainer, and the diffusers integration is inference-only. This is the trainer.
 
 | | |
 |---|---|
-| **training modes** | t2va, i2v, fl2va, v2a, a2v and IC-LoRA, all from one `flexible` strategy |
-| **reference conditioning** | reference image/video/audio packed in-context, masked from the loss, trained |
+| **training modes** | t2va, i2v/fl2va and v2a from one `flexible` strategy; a2v and first+last-frame are expressible in the same schema but ship no config and have never been run |
+| **reference conditioning** ⚠️ | reference image/video/audio packed in-context and masked from the loss — experimental, see [status](#ic-lora-status) |
 | **prompt vision blocks** | keyframes and references appear in the conditioner's presentation, tagged as video |
 | **configuration** | YAML, validated — unknown keys fail at load, not six hours in |
 | **data** | offline two-pass latent cache; VAE round-trip verification built in |
 | **batching** | layout-bucketed sampler, per-epoch shuffling, gradient accumulation |
-| **acceleration** | model-parallel bf16, DDP, ZeRO-2/3, NF4/int8/fp8 quantization of the frozen base |
+| **acceleration** | model-parallel bf16 (the path everything here ran on) and DDP; ZeRO-2/3 and int8/fp8 quantization are implemented but [untested](#untested) |
 | **checkpoints** | trainable tensors only; exact resume of weights, optimizer, scheduler and step |
 | **logging** | text + JSONL + W&B, with video and audio losses kept separate |
-| **validation** | held-out loss on a seeded sigma grid, and real generation |
+| **validation** | held-out loss on a seeded sigma grid, and real generation with a same-seed A/B |
 | **export** | ComfyUI-loadable adapters, Q/K/V re-fused, bit-exact |
 | **inference** | multi-GPU sharded generation, same-seed A/B with the adapter on and off |
 
@@ -202,7 +205,7 @@ python scripts/train.py configs/t2va_lora.yaml --set optimization.steps=2000 lor
 | character AV (48GB) | [`character_av_lora.yaml`](configs/character_av_lora.yaml) | bf16 `model_parallel` |
 | image → video | [`i2v_lora.yaml`](configs/i2v_lora.yaml) | `first_frame` condition |
 | video → audio | [`v2a_lora.yaml`](configs/v2a_lora.yaml) | `video.is_generated: false` |
-| **IC-LoRA** | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` |
+| **IC-LoRA** ⚠️ | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` — experimental, see [status](#ic-lora-status) |
 | low VRAM | [`t2va_lora_low_vram.yaml`](configs/t2va_lora_low_vram.yaml) | NF4 base, DDP replicas |
 
 Watch `loss_video` and `loss_audio` **separately**. A healthy total hiding a flat audio term is the
@@ -272,10 +275,10 @@ the obvious one. Measured on 8×A6000 (no NVLink):
 
 | strategy | weights/GPU | 48GB? | notes |
 |---|---|---|---|
-| `model_parallel` | ~8GB (8 GPUs), ~22GB (3) | **yes** | one process, blocks split across GPUs, full bf16. Floor is 2 GPUs — 66GB cannot fit on one. |
-| `ddp` + `nf4-bnb` | ~18GB | yes | full replicas; see the 4-bit warning |
-| `ddp` + `int8-quanto` | ~33GB | tight | little room for activations at real resolutions |
-| `deepspeed_zero3` | ~8GB after partition | **no** | each rank holds all 66GB *before* partitioning. Fine on 80GB cards. |
+| `model_parallel` | ~8GB (8 GPUs), ~22GB (3) | **yes** | one process, blocks split across GPUs, full bf16. Floor is 2 GPUs — 66GB cannot fit on one. **This is the path every run here used.** |
+| `ddp` + `nf4-bnb` | ~18GB | yes | full replicas; smoke-tested only, and see the 4-bit warning |
+| `ddp` + `int8-quanto` ⚠️ | ~33GB (estimated) | untested | never run; little room for activations at real resolutions |
+| `deepspeed_zero3` | ~8GB after partition | **no** | each rank holds all 66GB *before* partitioning. Fails here; untested on 80GB cards. |
 
 Model-parallel runs blocks **sequentially**, so extra GPUs buy memory, not speed. The reason to use
 fewer GPUs per run is *concurrency* — four 2-GPU runs instead of one 4-GPU run.
@@ -296,6 +299,54 @@ control-adapter runs around a bucket you can afford, not the largest one that fi
 > AdaLN branches destroys generation — an NF4 sample here decoded to noise indistinguishable from
 > decoding random latents. Train against it if you must; evaluate against bf16.
 
+### <a name="untested"></a>What is implemented but untested
+
+Written, reachable from config, and **never run** — treat as experimental and read the code before
+relying on it. Listed rather than removed because the code paths exist and are probably close; they
+simply have no evidence behind them.
+
+| area | untested |
+|---|---|
+| training | `training_mode: full` and `heads`; `optimizer_type: adamw8bit` |
+| acceleration | `deepspeed_zero2`; `deepspeed_zero3` (cannot start on 48GB, unverified on 80GB); `int8-quanto`, `int8-bnb`, `fp8-quanto` |
+| modes | `a2v` and first+last-frame — expressible, no shipped config |
+| inference | `--placement bf16` and `--placement offload` (`shard` and `quantize` are exercised) |
+| logging | W&B **online** (offline is what every run here used) |
+| publishing | `hub.push_to_hub` |
+| scale | anything past 36 clips, ~10k rows, or a single machine |
+
+Everything not in this list has at least one real run behind it. `nf4-bnb` has run, and is documented
+as unusable for generation.
+
+---
+
+## ⚠️ IC-LoRA status
+
+<a name="ic-lora-status"></a>
+
+In-context reference conditioning is the capability here that exists nowhere else, and it is
+**experimental**. Being precise about the line:
+
+**Verified.** Reference latents are packed into the sequence in the layout the inference pipeline
+builds — a reference image contributes 4,096 rows to an 8,741-row sequence. Reference rows are pinned
+at their conditioning timesteps (visual `t=0.999`, audio clean at `t=1.0`), masked out of the loss,
+and gradients flow to the adapter. The packing, the timesteps and the encoding recipe were each
+checked line by line against the pinned diffusers integration.
+
+**Not verified.** No IC-LoRA has been trained to convergence, and **no generation has been produced
+from a reference**. Until that exists, treat reference conditioning as a mechanism that is correct on
+paper and in shape, not as a demonstrated result.
+
+**Two known gaps**, both documented where they live:
+
+* reference **dropout** (`probability < 1.0`) removes the reference rows but leaves its label and
+  vision block in the cached prompt — a state inference never produces. Use `probability: 1.0` until
+  preprocessing caches a second, reference-free embedding.
+* a faithful video reference is **expensive**: at inference H3 places it on its own 768-short-edge
+  canvas whatever your target bucket, which is tens of thousands of rows on its own.
+  `--reference-canvas target` trades that fidelity for a run you can afford, and the choice is
+  recorded in the cache.
+
 ---
 
 ## 📊 Results
@@ -307,10 +358,10 @@ What has actually been measured on this hardware, not claims:
 | VAE round-trip (video) | 22.8 dB PSNR on a hard synthetic pattern; colour, geometry and motion intact |
 | VAE round-trip (audio) | dominant frequency preserved (439.5 Hz), 0.82 waveform correlation |
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
-| IC-LoRA packing | a reference image contributes 4,096 rows to an 8,741-row sequence; loss over the 448 target rows only |
+| IC-LoRA packing ⚠️ | a reference image contributes 4,096 rows to an 8,741-row sequence, loss over the 448 target rows only — packing only; **no conditioned generation yet**, see [status](#ic-lora-status) |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
-| Unit tests | 46 passing |
+| Unit tests | 51 passing, `ruff` clean |
 
 ---
 
@@ -318,9 +369,9 @@ What has actually been measured on this hardware, not claims:
 
 **Shipped**
 
-- [x] LoRA training — t2va, i2v, fl2va, v2a, a2v from one `flexible` strategy
-- [x] IC-LoRA — reference rows packed, masked from loss, trained
-- [x] Model-parallel bf16 training on 48GB cards
+- [x] LoRA training — t2va, i2v/fl2va and v2a, each with a shipped config and a run behind it
+- [ ] IC-LoRA ⚠️ — packing verified and training runs, but not yet demonstrated end to end
+- [x] Model-parallel bf16 training on 48GB cards, no quantization needed
 - [x] Two-pass latent caching with VAE round-trip verification
 - [x] Exact resume — weights + optimizer + scheduler + step
 - [x] ComfyUI adapter export

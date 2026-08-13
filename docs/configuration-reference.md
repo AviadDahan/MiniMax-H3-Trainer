@@ -1,5 +1,8 @@
 # Configuration reference
 
+> ⚠️ marks an option that is implemented and reachable but has **never been run**. See the
+> [untested list](../README.md#untested). Everything unmarked has at least one real run behind it.
+
 Every key of `H3TrainerConfig` ([`src/h3_trainer/config.py`](../src/h3_trainer/config.py)). Unknown
 keys are rejected at load — a typo fails immediately rather than being ignored for six hours.
 
@@ -15,7 +18,7 @@ python scripts/train.py configs/t2va_lora.yaml --set optimization.steps=500 lora
 |---|---|---|
 | `model_path` | — | local diffusers-layout MiniMax-H3 directory; must exist |
 | `variant` | `fl2va` | `fl2va` → subfolder `transformer`; `ref2va` → `transformer_ref` |
-| `training_mode` | `lora` | `lora`, `full` (needs `deepspeed_zero3`), `heads` (proj_out only — a pipeline smoke test) |
+| `training_mode` | `lora` | `lora`, `full` ⚠️ (needs `deepspeed_zero3`), `heads` ⚠️ (proj_out only — a pipeline smoke test) |
 | `load_checkpoint` | `null` | checkpoint directory or file; a directory resolves to its latest |
 
 ## `lora`
@@ -66,7 +69,7 @@ path alive.
 | `batch_size` | 1 | only samples with an identical packed layout can share a batch |
 | `gradient_accumulation_steps` | 1 | the practical way to raise the effective batch |
 | `max_grad_norm` | 1.0 | |
-| `optimizer_type` | `adamw` | or `adamw8bit` (bitsandbytes) |
+| `optimizer_type` | `adamw` | or `adamw8bit` ⚠️ (bitsandbytes) |
 | `adam_betas` | `[0.9, 0.95]` | |
 | `weight_decay` | 0.01 | |
 | `scheduler_type` | `linear` | `constant`, `linear`, `cosine`, `cosine_with_restarts`, `polynomial` |
@@ -79,10 +82,10 @@ path alive.
 
 | key | default | notes |
 |---|---|---|
-| `strategy` | `ddp` | `ddp`, `model_parallel`, `deepspeed_zero2`, `deepspeed_zero3` |
+| `strategy` | `ddp` | `ddp`, `model_parallel`, `deepspeed_zero2` ⚠️, `deepspeed_zero3` ⚠️ |
 | `deepspeed_config` | `null` | explicit JSON; otherwise generated from this section |
 | `mixed_precision_mode` | `bf16` | `no`, `fp16`, `bf16` |
-| `quantization` | `none` | `int8-quanto`, `fp8-quanto`, `nf4-bnb`, `int8-bnb` — frozen base only |
+| `quantization` | `none` | `nf4-bnb`, `int8-quanto` ⚠️, `fp8-quanto` ⚠️, `int8-bnb` ⚠️ — frozen base only |
 | `offload_optimizer_during_validation` | `false` | |
 
 **Choosing a strategy** is a memory question first:
@@ -155,7 +158,7 @@ community fused-QKV layout.
 
 | key | default |
 |---|---|
-| `hub.push_to_hub` / `hub.hub_model_id` | `false` / `null` |
+| `hub.push_to_hub` ⚠️ / `hub.hub_model_id` | `false` / `null` |
 | `wandb.enabled` / `project` / `entity` / `name` / `tags` / `log_validation_videos` | `false` / `h3-trainer` / `null` / `null` / `[]` / `true` |
 | `seed` | 42 |
 | `output_dir` | `outputs/h3_lora` |

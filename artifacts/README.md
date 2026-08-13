@@ -1,6 +1,12 @@
 # Artifacts
 
-Everything this repo produced on 8×A6000, in one place. Rebuild with:
+**In a fresh clone this directory is empty apart from this file.** Everything below describes runs
+made on the development machine (8×A6000); the media and weights are gitignored, and the symlinks are
+local. This page is kept in the repo as the *index* — what was produced, and what each item
+demonstrates — so the claims in the README can be traced to something specific even when you cannot
+see the bytes. The demo media that ships with the repo is in [`../docs/demo/`](../docs/demo).
+
+Rebuild on a machine that has the runs:
 
 ```bash
 bash scripts/collect_artifacts.sh
