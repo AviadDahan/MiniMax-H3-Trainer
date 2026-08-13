@@ -44,43 +44,39 @@ python scripts/generate.py --prompt "..." --lora runs/.../checkpoint-0000600 --a
 
 ---
 
-## Why this exists
+## What it does
 
 MiniMax released H3's weights "to support further development, including fine-tuning" but shipped no
-trainer, and the diffusers integration is inference-only. The one public trainer,
-[MiniMax-H3-FineTuning](https://github.com/IAmIronMan42/MiniMax-H3-FineTuning), is a research script:
-argparse only, one sample per step, no shuffling, no W&B, no validation sampling, no optimizer state
-in checkpoints, and no reference conditioning at all. Its real contribution is `FIXES.md` — nine
-model-specific corrections learned the hard way. Those are preserved here, with tests, plus:
+trainer, and the diffusers integration is inference-only. This is the trainer.
 
-| | reference trainer | h3-trainer |
-|---|---|---|
-| configuration | CLI flags | YAML, validated (`extra="forbid"`) |
-| training modes | t2va / fl2va | t2va, i2v, fl2va, v2a, a2v, **IC-LoRA** |
-| **reference conditioning** | not implemented | packed, masked from loss, trained |
-| **prompt vision blocks** | text only | keyframe / reference blocks in the presentation |
-| LoRA targets | `to_qkv` — matches nothing (below) | verified against the model at startup |
-| batching | 1 sample/step, no shuffle | bucketed batching, shuffling, grad accumulation |
-| acceleration | DDP, ZeRO-3 | + **model-parallel**, + NF4/int8/fp8 quantization |
-| resume | weights only | weights + optimizer + scheduler + step |
-| logging | text file | text + JSONL + W&B, per-modality losses, media |
-| validation | held-out loss | held-out loss **and** real generation |
-| export | raw tensors | ComfyUI-compatible fused-QKV adapters |
-| inference | — | `generate.py`, adapter A/B on one seed |
+| | |
+|---|---|
+| **training modes** | t2va, i2v, fl2va, v2a, a2v and IC-LoRA, all from one `flexible` strategy |
+| **reference conditioning** | reference image/video/audio packed in-context, masked from the loss, trained |
+| **prompt vision blocks** | keyframes and references appear in the conditioner's presentation, tagged as video |
+| **configuration** | YAML, validated — unknown keys fail at load, not six hours in |
+| **data** | offline two-pass latent cache; VAE round-trip verification built in |
+| **batching** | layout-bucketed sampler, per-epoch shuffling, gradient accumulation |
+| **acceleration** | model-parallel bf16, DDP, ZeRO-2/3, NF4/int8/fp8 quantization of the frozen base |
+| **checkpoints** | trainable tensors only; exact resume of weights, optimizer, scheduler and step |
+| **logging** | text + JSONL + W&B, with video and audio losses kept separate |
+| **validation** | held-out loss on a seeded sigma grid, and real generation |
+| **export** | ComfyUI-loadable adapters, Q/K/V re-fused, bit-exact |
+| **inference** | multi-GPU sharded generation, same-seed A/B with the adapter on and off |
 
-### Two upstream bugs this avoids
+### Two things that will bite you
 
-**A LoRA that never touches Q/K/V.** The reference trainer targets `["to_qkv", "to_out.0", "linear_1",
-"linear_2"]` — names from the *original* MiniMax packaging. The diffusers conversion splits attention
-into `to_q`/`to_k`/`to_v` and names the feed-forward `ff.net.0.proj`/`ff.net.2`. PEFT only errors when
-*no* target matches, so `to_qkv` is silently dropped while `linear_1`/`linear_2` match the time
-embedder — a healthy parameter count from an adapter that never adapts attention. Targets are now
-verified against the loaded model at startup, and `export_lora.py` re-fuses Q/K/V on the way out so
-adapters still load in ComfyUI.
+**LoRA targets that match nothing.** The diffusers conversion of H3 splits attention into
+`to_q`/`to_k`/`to_v` and names the feed-forward `ff.net.0.proj`/`ff.net.2`. The *original* MiniMax
+packaging uses a fused `to_qkv` and `linear_1`/`linear_2`, and those names appear in circulation. PEFT
+only errors when **no** target matches, so a list mixing the two silently drops the ones that don't
+exist — `to_qkv` matches nothing while `linear_1`/`linear_2` match the time embedder, giving a healthy
+parameter count from an adapter that never adapts attention. Every target is verified against the
+loaded model at startup here, and `export_lora.py` re-fuses Q/K/V on the way out so adapters still load
+in ComfyUI.
 
-**A stale transformers pin.** H3's conditioner needs Qwen3-VL's `mm_token_type_ids`; neither the
-processor helper that builds them nor the model argument that consumes them exists in the pinned
-4.57.3. **`transformers >= 5.15` is required.**
+**`transformers` must be ≥ 5.15.** H3's conditioner needs Qwen3-VL's `mm_token_type_ids`; neither the
+processor helper that builds them nor the model argument that consumes them exists in 4.57.x.
 
 ---
 
