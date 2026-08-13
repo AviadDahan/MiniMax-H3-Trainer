@@ -14,3 +14,9 @@ dist/
 outputs/
 runs/
 wandb/
+
+# Collected run outputs. artifacts/README.md is the index and IS tracked; the
+# media and weights inside are not -- they are reproducible with
+# scripts/collect_artifacts.sh from /data/aviad/runs.
+artifacts/**
+!artifacts/README.md
