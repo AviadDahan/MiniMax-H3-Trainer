@@ -18,6 +18,7 @@ configs use ``${H3_MODEL_PATH}`` and ``${H3_RUNS}`` (both set by
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -207,6 +208,15 @@ class ModelConfig(ConfigBaseModel):
     @classmethod
     def _must_exist(cls, value: Path) -> Path:
         if not Path(value).exists():
+            # An unexpanded ${VAR} means the variable is unset, not that the path
+            # is wrong -- say which, since the fix is different.
+            unset = re.findall(r"\$\{?(\w+)\}?", str(value))
+            if unset:
+                raise ValueError(
+                    f"model_path refers to {', '.join('$' + name for name in unset)}, which is not set "
+                    f"in the environment (got {value!r}). Run `source scripts/env.sh`, or set "
+                    f"model.model_path to a literal path."
+                )
             raise ValueError(f"model_path does not exist: {value}")
         return Path(value)
 
