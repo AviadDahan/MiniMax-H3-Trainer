@@ -106,6 +106,13 @@ alone — it needs at least one visual reference or the prompt to anchor the gen
 **Reference dropout matters here.** With `probability: 1.0` the adapter only ever sees a reference and
 loses the unconditioned path; 0.8–0.9 keeps both alive.
 
+## Running them on the hardware you have
+
+Every mode above is orthogonal to `acceleration.strategy`. On 80GB cards, `deepspeed_zero3` gives
+data parallelism with full precision. On 48GB cards it cannot start -- each rank builds the whole
+66GB model before ZeRO partitions it -- so use `model_parallel`, which splits one bf16 copy across
+the GPUs in a single process. See the [configuration reference](configuration-reference.md#acceleration).
+
 ## Batching
 
 H3's batch axis is a pure replication axis over *one shared layout*: `position_ids`, `token_tags` and

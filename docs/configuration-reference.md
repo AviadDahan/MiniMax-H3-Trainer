@@ -79,16 +79,29 @@ path alive.
 
 | key | default | notes |
 |---|---|---|
-| `strategy` | `ddp` | `ddp`, `deepspeed_zero2`, `deepspeed_zero3` |
+| `strategy` | `ddp` | `ddp`, `model_parallel`, `deepspeed_zero2`, `deepspeed_zero3` |
 | `deepspeed_config` | `null` | explicit JSON; otherwise generated from this section |
 | `mixed_precision_mode` | `bf16` | `no`, `fp16`, `bf16` |
 | `quantization` | `none` | `int8-quanto`, `fp8-quanto`, `nf4-bnb`, `int8-bnb` — frozen base only |
 | `offload_optimizer_during_validation` | `false` | |
 
+**Choosing a strategy** is a memory question first:
+
+* `ddp` — one full replica per GPU. Needs quantization on anything under 80GB, and then only LoRA
+  gradients cross the bus. The fastest option when the model fits.
+* `model_parallel` — a single process holding one copy of the bf16 weights, split by transformer
+  block across the GPUs (~8GB each on 8 cards), with the modules that consume the packed layout's
+  index vectors pinned to one device. Full precision on small cards; no data parallelism, so raise
+  `gradient_accumulation_steps` instead. Launch with plain `python`, not `torchrun`/`deepspeed`.
+* `deepspeed_zero3` — shards weights, gradients and optimizer state. Each rank still constructs the
+  whole model *before* partitioning, so it needs cards that can hold 66GB.
+
 Quantization and DeepSpeed ZeRO are mutually exclusive and the config says so: ZeRO partitions and
 all-gathers raw parameter tensors, which quantized modules no longer expose.
 
-Rough transformer footprints: bf16 66GB · int8 33GB · **nf4 ~18GB**.
+Rough transformer footprints: bf16 66GB · int8 33GB · **nf4 ~18GB**. Note that 4-bit degrades this
+model's *generation* badly (it quantizes the AdaLN branches); train against it if you must, but
+evaluate against bf16.
 
 ## `data`
 
