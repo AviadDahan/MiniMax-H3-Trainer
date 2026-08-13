@@ -104,14 +104,14 @@ def main() -> int:
 
     # Baseline first, while the transformer is still untouched.
     base_paths = []
-    for index, (request, conditioning) in enumerate(zip(requests, conditionings)):
+    for index, (request, conditioning) in enumerate(zip(requests, conditionings, strict=True)):
         base_paths.append(
             pipeline.generate_prepared(request, conditioning, args.out_dir / f"sample{index}_base.mp4")
         )
 
     pipeline.load_lora(args.lora, scale=args.lora_scale)
     report = []
-    for index, (request, conditioning) in enumerate(zip(requests, conditionings)):
+    for index, (request, conditioning) in enumerate(zip(requests, conditionings, strict=True)):
         adapted = pipeline.generate_prepared(
             request, conditioning, args.out_dir / f"sample{index}_lora.mp4"
         )

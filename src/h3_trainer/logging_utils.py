@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ class RunLogger:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._text = (self.output_dir / "train.log").open("a", buffering=1)
         self._jsonl = (self.output_dir / "metrics.jsonl").open("a", buffering=1)
-        self._write_text(f"=== run started {datetime.now(timezone.utc).isoformat()} ===")
+        self._write_text(f"=== run started {datetime.now(UTC).isoformat()} ===")
 
         if wandb_config is not None and wandb_config.enabled:
             try:
@@ -57,7 +57,7 @@ class RunLogger:
 
     def _write_text(self, message: str) -> None:
         if self._text is not None:
-            self._text.write(f"{datetime.now(timezone.utc).isoformat()} {message}\n")
+            self._text.write(f"{datetime.now(UTC).isoformat()} {message}\n")
 
     def log(
         self,

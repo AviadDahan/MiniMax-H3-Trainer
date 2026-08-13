@@ -192,7 +192,7 @@ def prepared_references_from_cache(entries: list[tuple[str, torch.Tensor, torch.
         kind = REFERENCE_KINDS[values[0]]
         if kind != configured_kind:
             logger.debug("Reference cached as %r while config says %r; using the cache", kind, configured_kind)
-        fields = dict(zip(REFERENCE_GEOMETRY_FIELDS, values[1:]))
+        fields = dict(zip(REFERENCE_GEOMETRY_FIELDS, values[1:], strict=True))
         references.append(
             MiniMaxH3PreparedReference(
                 kind=kind,

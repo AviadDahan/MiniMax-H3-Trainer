@@ -42,7 +42,7 @@ from PIL import Image  # noqa: E402
 from h3_trainer import logger  # noqa: E402
 from h3_trainer.constants import Geometry  # noqa: E402
 from h3_trainer.inference import GenerationRequest, H3Pipeline  # noqa: E402
-from h3_trainer.preprocessing.media import decode_video, extract_audio, read_wav  # noqa: E402
+from h3_trainer.preprocessing.media import decode_video, extract_audio  # noqa: E402
 
 TRIGGER = "OHWXMIRA"
 
@@ -237,7 +237,7 @@ def stage_clips(args, pipeline: H3Pipeline, geometry: Geometry) -> None:
     logger.info("Conditioning %d prompts", len(plans))
     conditionings = pipeline.encode_conditioning_batch([plan[2] for plan in plans])
 
-    for (sample_id, caption, request), conditioning in zip(plans, conditionings):
+    for (sample_id, caption, request), conditioning in zip(plans, conditionings, strict=True):
         clip_path = clips_dir / f"{sample_id}.mp4"
         try:
             pipeline.generate_prepared(request, conditioning, clip_path)
@@ -278,7 +278,8 @@ def stage_review(args) -> None:
             reasons.append("silent")
         (dropped if reasons else kept).append({**row, "reasons": reasons})
 
-    (out / "dataset.json").write_text(json.dumps([{k: v for k, v in r.items() if k != "reasons"} for r in kept], indent=1))
+    manifest = [{k: v for k, v in row.items() if k != "reasons"} for row in kept]
+    (out / "dataset.json").write_text(json.dumps(manifest, indent=1))
     (out / "rejected.json").write_text(json.dumps(dropped, indent=1))
     logger.info("QC kept %d, dropped %d", len(kept), len(dropped))
     for row in dropped:

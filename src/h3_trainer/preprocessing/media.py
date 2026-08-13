@@ -26,8 +26,8 @@ from PIL import Image, ImageOps
 
 from h3_trainer import logger
 from h3_trainer.constants import (
-    AUDIO_SAMPLES_PER_LATENT,
     AUDIO_SAMPLE_RATE,
+    AUDIO_SAMPLES_PER_LATENT,
     MINIMAX_H3_AUDIO_CHANNELS,
     MINIMAX_H3_FPS,
     resolve_canvas_size,

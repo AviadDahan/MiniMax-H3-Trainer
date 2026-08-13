@@ -169,8 +169,14 @@ class FlexibleStrategy(TrainingStrategy):
             )
             return None, None, None
 
+        # strict: a config declaring more reference conditions than the cache holds
+        # is a misconfiguration, and pairing them off silently would condition on
+        # the wrong geometry.
         references = prepared_references_from_cache(
-            [(condition.modality, cached, geom) for condition, geom in zip(wanted, batch["reference_geometry"])]
+            [
+                (condition.modality, cached, geom)
+                for condition, geom in zip(wanted, batch["reference_geometry"], strict=True)
+            ]
         )
         video_rows = batch.get("reference_video_rows")
         audio_rows = batch.get("reference_audio_rows")

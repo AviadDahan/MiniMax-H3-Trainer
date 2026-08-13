@@ -37,6 +37,7 @@ from h3_trainer.model_loader import load_audio_vae, load_text_encoder, load_vide
 from h3_trainer.packing import encode_reference_geometry
 from h3_trainer.preprocessing.media import frames_to_pixel_tensor
 
+
 @dataclass
 class EncodedReference:
     """Cached rows plus the latent geometry the ref2va packer replays."""
@@ -173,7 +174,7 @@ class H3Encoders:
         AdaLN modulation keys off that tag -- getting it wrong changes how every
         text row is modulated.
         """
-        tokenizer, processor, model = self.text.tokenizer, self.text.processor, self.text.model
+        tokenizer, processor = self.text.tokenizer, self.text.processor
         pixel_values = image_grid_thw = None
         token_ids: list[int] = []
         token_tags: list[int] = []
@@ -234,7 +235,7 @@ class H3Encoders:
         videos = [reference for reference in references if reference.kind == "video"]
         if videos:
             sampled = [sample_reference_video_frames(reference.frames) for reference in videos]
-            for reference, (_, timestamps) in zip(videos, sampled):
+            for reference, (_, timestamps) in zip(videos, sampled, strict=True):
                 reference.block_timestamps = timestamps
             vision = processor.video_processor(
                 videos=[np.stack(frames) for frames, _ in sampled], do_sample_frames=False, return_tensors="pt"

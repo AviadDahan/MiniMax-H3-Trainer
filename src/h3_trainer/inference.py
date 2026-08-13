@@ -252,7 +252,7 @@ class H3Pipeline:
 
         # The conditioner takes different preprocessing paths for images and
         # videos, so each descriptor carries its own media.
-        for reference, (kind, value) in zip(prepared, media):
+        for reference, (kind, value) in zip(prepared, media, strict=True):
             if kind == "image":
                 reference.image = value
             elif kind == "frames":

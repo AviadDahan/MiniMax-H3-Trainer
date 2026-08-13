@@ -229,7 +229,10 @@ def to_comfyui_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torc
             converted[f"{converted_path}.lora_{ab}.weight"] = tensor.contiguous()
 
     for block_index, projections in qkv_groups.items():
-        def pair(name: str) -> tuple[torch.Tensor, torch.Tensor] | None:
+        # `projections` is bound as a default: the closure is only ever called
+        # inside this iteration, but binding it makes that independent of where
+        # the call happens to sit.
+        def pair(name: str, projections=projections) -> tuple[torch.Tensor, torch.Tensor] | None:
             entry = projections.get(name)
             if entry is None or "A" not in entry or "B" not in entry:
                 return None

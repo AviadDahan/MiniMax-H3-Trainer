@@ -75,7 +75,9 @@ def find_latest_checkpoint(path: str | Path) -> Path | None:
     return max(candidates, key=lambda entry: int(CHECKPOINT_PATTERN.search(entry.name).group(1)))
 
 
-def gather_trainable_state(model: torch.nn.Module, engine: Any | None, dtype: torch.dtype) -> dict[str, torch.Tensor] | None:
+def gather_trainable_state(
+    model: torch.nn.Module, engine: Any | None, dtype: torch.dtype
+) -> dict[str, torch.Tensor] | None:
     """Trainable tensors as a plain state dict, gathering ZeRO-3 shards if needed.
 
     Returns ``None`` when the gather produced empty tensors -- see the module

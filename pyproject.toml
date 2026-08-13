@@ -53,6 +53,11 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# A table of scene descriptions, one row per scene. Wrapping each row over three
+# lines makes it harder to scan, not easier.
+"scripts/generate_character_dataset.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
