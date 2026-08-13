@@ -203,45 +203,54 @@ class H3Encoders:
         return self._run_conditioner(token_ids, token_tags, pixel_values, image_grid_thw)
 
     @torch.no_grad()
-    def encode_ref2va_prompt(
-        self,
-        prompt: str,
-        references: list,
-        reference_images: list[Image.Image],
-        reference_video_blocks: list[list[Image.Image]],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def encode_ref2va_prompt(self, prompt: str, references: list) -> tuple[torch.Tensor, torch.Tensor]:
         """The ref2va presentation: labelled reference blocks, then the prompt.
 
-        Audio references are labelled but never reach the conditioner as pixels --
-        a waveform has no vision block -- so only images and video blocks carry
-        pixel values.
-        """
-        from diffusers.modular_pipelines.minimax_h3.packing_ref2va import build_ref2va_presentation
+        Each reference must carry its media: ``.image`` for an image reference,
+        ``.frames`` for a video one. Audio references are labelled but never reach
+        the conditioner -- a waveform has no vision block.
 
-        tokenizer, processor = self.text.tokenizer, self.text.processor
-        vision_images: list[Image.Image] = []
-        image_token_counts: list[int] = []
-        video_block_token_counts: list[int] = []
+        Images and videos go through *different* preprocessors. A video reference
+        is seen as a 2 fps block view and must be fed as ``pixel_values_videos``
+        with its own grid; running those blocks through the image processor
+        produces token counts that do not match the presentation, and the model
+        rejects the batch with "Image features and image tokens do not match".
+        """
+        from diffusers.modular_pipelines.minimax_h3.packing_ref2va import (
+            build_ref2va_presentation,
+            sample_reference_video_frames,
+        )
+
+        processor = self.text.processor
         merge_size = processor.image_processor.merge_size**2
 
-        for image in reference_images:
-            vision = processor.image_processor(images=[image], return_tensors="pt")
-            image_token_counts.append(int(vision["image_grid_thw"][0].prod()) // merge_size)
-            vision_images.append(image)
-        for blocks in reference_video_blocks:
-            for block in blocks:
-                vision = processor.image_processor(images=[block], return_tensors="pt")
-                video_block_token_counts.append(int(vision["image_grid_thw"][0].prod()) // merge_size)
-                vision_images.append(block)
+        pixel_values = image_grid_thw = None
+        image_token_counts: list[int] = []
+        images = [reference.image for reference in references if reference.kind == "image"]
+        if images:
+            vision = processor.image_processor(images=images, return_tensors="pt")
+            pixel_values, image_grid_thw = vision["pixel_values"], vision["image_grid_thw"]
+            image_token_counts = [int(grid.prod()) // merge_size for grid in image_grid_thw]
+
+        pixel_values_videos = video_grid_thw = None
+        video_block_token_counts: list[int] = []
+        videos = [reference for reference in references if reference.kind == "video"]
+        if videos:
+            sampled = [sample_reference_video_frames(reference.frames) for reference in videos]
+            for reference, (_, timestamps) in zip(videos, sampled):
+                reference.block_timestamps = timestamps
+            vision = processor.video_processor(
+                videos=[np.stack(frames) for frames, _ in sampled], do_sample_frames=False, return_tensors="pt"
+            )
+            pixel_values_videos, video_grid_thw = vision["pixel_values_videos"], vision["video_grid_thw"]
+            video_block_token_counts = [int(grid[1]) * int(grid[2]) // merge_size for grid in video_grid_thw]
 
         token_ids, token_tags = build_ref2va_presentation(
-            tokenizer, prompt, references, image_token_counts, video_block_token_counts
+            self.text.tokenizer, prompt, references, image_token_counts, video_block_token_counts
         )
-        pixel_values = image_grid_thw = None
-        if vision_images:
-            vision = processor.image_processor(images=vision_images, return_tensors="pt")
-            pixel_values, image_grid_thw = vision["pixel_values"], vision["image_grid_thw"]
-        return self._run_conditioner(token_ids, token_tags, pixel_values, image_grid_thw)
+        return self._run_conditioner(
+            token_ids, token_tags, pixel_values, image_grid_thw, pixel_values_videos, video_grid_thw
+        )
 
     def _run_conditioner(
         self,
@@ -249,6 +258,8 @@ class H3Encoders:
         token_tags: list[int],
         pixel_values: torch.Tensor | None,
         image_grid_thw: torch.Tensor | None,
+        pixel_values_videos: torch.Tensor | None = None,
+        video_grid_thw: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         model, processor = self.text.model, self.text.processor
         num_layers = model.config.text_config.num_hidden_layers
@@ -270,6 +281,10 @@ class H3Encoders:
             mm_token_type_ids=mm_token_type_ids,
             pixel_values=None if pixel_values is None else pixel_values.to(text_device, model.dtype),
             image_grid_thw=None if image_grid_thw is None else image_grid_thw.to(text_device),
+            pixel_values_videos=(
+                None if pixel_values_videos is None else pixel_values_videos.to(text_device, model.dtype)
+            ),
+            video_grid_thw=None if video_grid_thw is None else video_grid_thw.to(text_device),
             use_cache=False,
             output_hidden_states=True,
         )

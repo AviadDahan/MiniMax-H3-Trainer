@@ -100,9 +100,13 @@ def flow_matching_loss(
             keeping the term in the graph, so gradients (of zero) still flow
             through the audio head and DDP/ZeRO stay in sync across ranks. See
             ``audio_loss_weight``.
-        row_mask: optional ``(rows,)`` boolean mask selecting the rows that carry
-            loss. Conditioning rows (keyframes, IC-LoRA references) are excluded
-            this way -- they are inputs, not targets.
+        row_mask: optional boolean mask over the **prediction's** rows, selecting
+            the ones that carry loss. The model returns a prediction for every row
+            of a modality -- conditioning rows (keyframes, IC-LoRA references)
+            included -- while ``clean``/``noise`` hold only the target rows, since
+            the conditioning rows were prepended separately when the sequence was
+            assembled. So the mask applies to the prediction alone; applying it to
+            the target as well would index a tensor that never had those rows.
     """
     target = velocity_target(clean, noise)
     if target.dim() == prediction.dim() - 1:
@@ -110,9 +114,12 @@ def flow_matching_loss(
     pred = prediction.float()
     target = target.float()
     if row_mask is not None:
-        mask = row_mask.to(pred.device)
-        pred = pred[..., mask, :]
-        target = target[..., mask, :]
+        pred = pred[..., row_mask.to(pred.device), :]
+    if pred.shape[-2] != target.shape[-2]:
+        raise ValueError(
+            f"Loss rows do not line up: {pred.shape[-2]} predicted rows against {target.shape[-2]} "
+            f"target rows. The row mask must select exactly the generated rows."
+        )
     if pred.numel() == 0:
         return pred.sum() * 0.0
     return torch.nn.functional.mse_loss(pred, target) * weight

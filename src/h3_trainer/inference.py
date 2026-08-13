@@ -196,7 +196,6 @@ class H3Pipeline:
             MiniMaxH3PreparedReference,
             prepare_reference_image,
             resolve_reference_image_size,
-            sample_reference_video_frames,
         )
         from PIL import Image
 
@@ -205,7 +204,7 @@ class H3Pipeline:
 
         prepared: list[MiniMaxH3PreparedReference] = []
         video_rows, audio_rows = [], []
-        images, blocks = [], []
+        media: list[tuple[str, Any]] = []
 
         for entry in request.references:
             if entry.get("image"):
@@ -213,20 +212,20 @@ class H3Pipeline:
                 width, height = resolve_reference_image_size(original.width, original.height)
                 image = prepare_reference_image(original, height, width)
                 encoded = encoders.encode_reference("image", image=image)
-                images.append(image)
+                media.append(("image", image))
             elif entry.get("video"):
                 clip = decode_video(
                     entry["video"], request.geometry.num_frames, request.geometry.width, request.geometry.height
                 )
                 waveform = extract_audio(entry["video"], request.geometry.num_frames)
                 encoded = encoders.encode_reference("video", frames=clip.frames, waveform=waveform)
-                sampled, _ = sample_reference_video_frames(clip.frames)
-                blocks.append([Image.fromarray(np.asarray(b, dtype=np.uint8)) for b in sampled])
+                media.append(("frames", np.asarray(clip.frames, dtype=np.uint8)))
             else:
                 waveform = extract_audio(entry["audio"], request.geometry.num_frames)
                 if waveform is None:
                     raise ValueError(f"Reference audio {entry['audio']} has no usable track")
                 encoded = encoders.encode_reference("audio", waveform=waveform)
+                media.append(("audio", None))
 
             values = [int(v) for v in encoded.geometry.tolist()]
             prepared.append(
@@ -244,7 +243,14 @@ class H3Pipeline:
             if encoded.audio_rows is not None:
                 audio_rows.append(encoded.audio_rows)
 
-        embeds, tags = encoders.encode_ref2va_prompt(request.prompt, prepared, images, blocks)
+        # The conditioner takes different preprocessing paths for images and
+        # videos, so each descriptor carries its own media.
+        for reference, (kind, value) in zip(prepared, media):
+            if kind == "image":
+                reference.image = value
+            elif kind == "frames":
+                reference.frames = value
+        embeds, tags = encoders.encode_ref2va_prompt(request.prompt, prepared)
 
         condition_latents = torch.cat(video_rows) if video_rows else None
         if condition_latents is not None:

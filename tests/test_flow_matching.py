@@ -97,15 +97,30 @@ def test_zero_audio_is_weighted_out_but_stays_in_the_graph():
     assert torch.count_nonzero(prediction.grad) == 0
 
 
-def test_loss_masks_out_conditioning_rows():
-    clean = torch.randn(10, 4)
-    noise = torch.randn(10, 4)
-    prediction = velocity_target(clean, noise).unsqueeze(0).clone()
-    prediction[:, :3] = 1e3  # conditioning rows: wrong on purpose
+def test_loss_masks_conditioning_rows_out_of_the_prediction():
+    """The mask applies to the prediction only.
+
+    The model predicts every row of a modality, conditioning rows included, while
+    the cached clean/noise latents hold only the target rows -- the conditioning
+    rows were prepended when the sequence was assembled. Masking the target too
+    would index rows it never had, which is exactly what IC-LoRA training hit.
+    """
+    clean = torch.randn(7, 4)
+    noise = torch.randn(7, 4)
+    prediction = torch.cat(
+        [torch.full((3, 4), 1e3), velocity_target(clean, noise)]  # 3 conditioning rows, then targets
+    ).unsqueeze(0)
     mask = torch.ones(10, dtype=torch.bool)
     mask[:3] = False
+
     assert float(flow_matching_loss(prediction, clean, noise, row_mask=mask)) == pytest.approx(0.0, abs=1e-6)
-    assert float(flow_matching_loss(prediction, clean, noise)) > 1.0
+
+
+def test_loss_rejects_a_mask_that_does_not_line_up():
+    clean, noise = torch.randn(7, 4), torch.randn(7, 4)
+    prediction = torch.randn(1, 10, 4)
+    with pytest.raises(ValueError, match="do not line up"):
+        flow_matching_loss(prediction, clean, noise, row_mask=torch.ones(10, dtype=torch.bool))
 
 
 def test_seeded_noise_is_reproducible_and_seed_dependent():

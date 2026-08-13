@@ -356,8 +356,9 @@ class TextPass:
     def _encode(self, record: dict[str, Any], row: dict[str, Any]) -> tuple[torch.Tensor, torch.Tensor]:
         caption = record.get("caption", "")
         if self.options.references and record.get("reference_geometry"):
-            references, images, blocks = self._rebuild_reference_presentation(record, row)
-            return self.encoders.encode_ref2va_prompt(caption, references, images, blocks)
+            return self.encoders.encode_ref2va_prompt(
+                caption, self._rebuild_reference_presentation(record, row)
+            )
         keyframes = self._rebuild_keyframes(record, row)
         return self.encoders.encode_prompt(caption, keyframes or None)
 
@@ -385,17 +386,18 @@ class TextPass:
             images.append(Image.fromarray(clip.frames[frame_index]))
         return images
 
-    def _rebuild_reference_presentation(self, record: dict[str, Any], row: dict[str, Any]):
-        """Rebuild reference descriptors and conditioner blocks from the manifest.
+    def _rebuild_reference_presentation(self, record: dict[str, Any], row: dict[str, Any]) -> list:
+        """Rebuild the reference descriptors the conditioner needs.
 
-        The latents were encoded in the media pass; what the conditioner needs is
-        the *pixels* of each reference (an image, or a video's 2 fps block view),
-        which are cheap to recover without touching a VAE.
+        The latents were encoded in the media pass, and their geometry travels in
+        the index. What the *conditioner* needs is the pixels -- an image, or a
+        video's frames -- which are cheap to recover without touching a VAE. The
+        media has to be attached to each descriptor because images and videos take
+        different preprocessing paths.
         """
         from diffusers.modular_pipelines.minimax_h3.packing_ref2va import (
             prepare_reference_image,
             resolve_reference_image_size,
-            sample_reference_video_frames,
         )
 
         from h3_trainer.packing import prepared_references_from_cache
@@ -404,8 +406,6 @@ class TextPass:
         geometries = [torch.tensor(entry, dtype=torch.int64) for entry in record["reference_geometry"]]
         references = prepared_references_from_cache([("image", None, tensor) for tensor in geometries])
 
-        images: list[Image.Image] = []
-        blocks: list[list[Image.Image]] = []
         cursor = 0
         for kind, column in REFERENCE_COLUMNS:
             for media in _as_list(_pick(row, column)):
@@ -414,13 +414,11 @@ class TextPass:
                 if kind == "image":
                     original = Image.open(str(media)).convert("RGB")
                     width, height = resolve_reference_image_size(original.width, original.height)
-                    images.append(prepare_reference_image(original, height, width))
+                    reference.image = prepare_reference_image(original, height, width)
                 elif kind == "video":
                     clip = decode_video(media, geometry.num_frames, geometry.width, geometry.height)
-                    sampled, _timestamps = sample_reference_video_frames(clip.frames)
-                    blocks.append([Image.fromarray(np.asarray(block, dtype=np.uint8)) for block in sampled])
-                _ = reference
-        return references, images, blocks
+                    reference.frames = np.asarray(clip.frames, dtype=np.uint8)
+        return references
 
     def unload(self) -> None:
         self.encoders.unload()
