@@ -301,8 +301,10 @@ What has actually been measured on this hardware, not claims:
       cards, because each rank materializes all 66GB before partitioning. The largest single
       throughput win available on 48GB hardware.
 - [ ] **Real batching** — H3's batch axis replicates one shared layout, so batching needs identical
-      geometry *and* caption length. Fixed-length caption padding would unlock it; the risk is that H3
-      exposes no attention mask over the packed sequence, so pad rows are attended to as content.
+      geometry *and* caption length. Padding rows exist (tag `-1`, kept as a separate attention
+      document) but do not solve it on their own: the per-row tags and position ids are shared across
+      the batch, so items must agree on the layout, not merely on the length. Fixed-length captions
+      plus a shared bucket geometry would unlock it.
 - [ ] **Sequence parallelism** for 15s clips at 704p (~40k rows), which no single-GPU activation
       budget covers.
 - [ ] **`torch.compile`** on the block stack, and caching the precomputable AdaLN branches (about a

@@ -107,6 +107,12 @@ alone — it needs at least one visual reference or the prompt to anchor the gen
 loses the unconditioned path; 0.8–0.9 keeps both alive. The exception is structural conditioning,
 below.
 
+> **Known gap in dropout.** Dropping removes the reference *rows*, but not the reference from the
+> *prompt*: one embedding is cached per sample and it is built with the references present, labels and
+> vision blocks included. A dropout step therefore describes a reference whose rows are missing —
+> a state inference cannot produce. The fix is a second cached embedding built without the
+> presentation; until then, `probability: 1.0` is exact and lower values are approximate.
+
 ## Structural control: pose, depth, edges
 
 H3 ships no ControlNet and no structural input of any kind. IC-LoRA is the route to one: render the
@@ -126,9 +132,15 @@ conditions:
   structural reference *is the instruction*: steps without one teach the adapter to invent motion,
   which is the exact failure this mode exists to prevent.
 * **Bucket for the subject.** Square crops of full-body footage cut the legs off, and an adapter that
-  never sees ankles cannot place feet. `448x768x124` is the portrait bucket used here.
-* **Budget for two clips.** The reference costs as many rows as the target — roughly 25k rows at that
-  bucket, against 10k for an unconditioned 512×512 clip. Set `optimization.max_seq_tokens` above the
+  never sees ankles cannot place feet. A portrait bucket is the point; the worked example uses
+  `320x576x124`.
+* **Budget for two clips, and know which canvas you are on.** A reference costs as many rows as the
+  clip it is — 448×768×124 with a matching reference measured 27,364 rows at ~82 s/step on four
+  A6000s, against 9,970 rows at ~19 s for an unconditioned 512×512 clip. Attention over the packed
+  sequence is quadratic, so this dominates everything. Note also that `--reference-canvas native`
+  (the default, and what inference does) puts the reference on its *own* 768-short-edge canvas
+  regardless of your bucket, which is tens of thousands of rows on its own; `--reference-canvas
+  target` trades that fidelity for a run you can afford. Set `optimization.max_seq_tokens` above the
   real length or samples are silently skipped.
 * **Alignment is the whole signal.** The control video must be frame-aligned with its target at
   exactly 24.000 fps. A one-frame drift teaches a one-frame lag.
@@ -155,5 +167,8 @@ caption length — can share a micro-batch, which natural captions rarely do.
 `BucketBatchSampler` groups samples by `(video_rows, audio_rows, text_rows, has_audio)` and shuffles
 within and across buckets each epoch. In practice `batch_size: 1` with
 `gradient_accumulation_steps: N` is the reliable way to get an effective batch of N; there is no
-padding path, because H3 exposes no attention mask over the packed sequence and padding rows would be
-attended to as content.
+padding path. Not because padding is unsupported -- rows tagged `-1` form their own attention
+document, which is how the reference implementation pads to a multiple of 64 for FlashAttention --
+but because padding cannot fix the actual constraint. The structural tensors describe *one* layout
+shared by the whole batch, so two differently shaped samples would need different `token_tags`, and
+no amount of padding gives them the same ones.

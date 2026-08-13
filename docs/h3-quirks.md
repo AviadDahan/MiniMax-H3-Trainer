@@ -100,7 +100,7 @@ both; the tags travel in `conditions/<id>.safetensors` as `text_token_tags`.
 | frame count | `17n + 5` → 22, 39, 56, 73, 90, 107, 124, … |
 | latent frames | `5n + 2` |
 | height / width | divisible by 32 (VAE 16x, patch 2x) |
-| duration | 4–15 s |
+| duration | **5–15 s** to generate (the pinned pipeline rejects less; MiniMax's own README says 4, the code says 5). Training packs any `17n+5` length, but a clip under 5 s is out of the distribution the model generates. |
 | audio | 32 kHz stereo, 40 Hz latent grid, 800 samples per latent |
 | audio rows | channel-major: `[ch0 × N, ch1 × N]`, **not** interleaved |
 

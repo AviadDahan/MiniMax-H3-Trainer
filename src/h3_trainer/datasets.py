@@ -223,8 +223,14 @@ def identity_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
 def bucket_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
     """Stack samples that share an identical packed layout.
 
-    Raises rather than padding: H3 exposes no attention mask over the packed
-    sequence, so padding rows would be attended to as if they were content.
+    Raises rather than padding. Padding itself is supported -- rows tagged `-1`
+    are kept as a separate attention document, exactly as the reference
+    implementation does when it pads to a multiple of 64 -- but it does not help
+    here. H3's batch axis is a pure *replication* axis: `token_tags`,
+    `position_ids` and the index tensors describe one layout that every item in
+    the batch shares. Two samples of different shape cannot be made to share it
+    by padding, because they would need different tags. Bucketing is the way in,
+    and a padless sequence also keeps the unmasked attention backends available.
     """
     if len(batch) == 1:
         return batch[0]

@@ -141,6 +141,15 @@ class FlexibleStrategy(TrainingStrategy):
         IC-LoRA that has only ever seen a reference forgets how to generate
         without one, and the unconditional path is what validation prompts and
         plain text-to-video use.
+
+        **Known gap.** Dropping removes the reference *rows*, but the cached
+        prompt embedding still contains the reference's label and vision block --
+        one embedding is cached per sample, and it is built with the references
+        present. So a dropout step shows the model a description of a reference
+        whose rows are absent, which is a state inference never produces. Until
+        preprocessing caches a second, reference-free embedding, prefer
+        ``probability: 1.0`` for structural conditioning (where you never want
+        the unconditional path anyway) and treat sub-1.0 values as approximate.
         """
         wanted = [
             condition
