@@ -1,9 +1,9 @@
 ---
-name: h3-captions
-description: Write captions and prompts for MiniMax-H3 training with this trainer. Use when captioning a dataset, choosing where a LoRA trigger goes, describing the soundtrack that trains jointly with the picture, writing validation prompts, or working out why an adapter memorized the room instead of the subject.
+name: h3-prompt-writing
+description: Write prompts and captions for MiniMax-H3 training with this trainer. Use when captioning a dataset, choosing where a LoRA trigger goes, describing the soundtrack that trains jointly with the picture, writing validation prompts, or working out why an adapter memorized the room instead of the subject.
 ---
 
-# Captions and prompts for H3
+# Prompt writing for H3 training
 
 Written for **training-time** captioning with this trainer. For the full inference prompt
 specification - the structured field format MiniMax trained the released model on - their own guide is
