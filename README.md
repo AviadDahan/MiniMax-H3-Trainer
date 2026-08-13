@@ -312,6 +312,7 @@ straightforwardly dual-use.
 | `plot_metrics.py` | read a training curve honestly — sigma-controlled trend, per-bin means |
 | `export_lora.py` | adapter → ComfyUI fused-QKV layout |
 | `normalize_clips.py` | raw footage → 24.000 fps, bucket resolution, 32kHz stereo |
+| `extract_pose.py` | footage → frame-aligned skeleton videos, for structural IC-LoRA |
 | `generate_character_dataset.py` | build a character dataset with H3 itself |
 | `collect_artifacts.sh` | surface all run outputs under `artifacts/` |
 
