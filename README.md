@@ -380,7 +380,7 @@ no adapter, and it reproduces the skeleton rather than generating anything from 
 what converts a reference from something to copy into something to obey:
 
 <p align="center">
-  <img src="docs/demo/iclora_base_vs_adapter.png" alt="base reproduces the skeleton, adapter generates a person following it" width="540">
+  <img src="docs/demo/iclora_control_576x1024.png" alt="base reproduces the skeleton, adapter generates a person following it" width="640">
 </p>
 
 <sub>Left: base model, same reference and seed. Right: with the adapter.</sub>
