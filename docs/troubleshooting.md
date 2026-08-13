@@ -30,7 +30,7 @@ constructed the model, so every rank needs to hold 66GB first. That works on 80G
 48GB ones. On smaller cards use `strategy: model_parallel` (one process, blocks split across GPUs,
 full bf16) or `strategy: ddp` with `quantization: nf4-bnb`.
 
-**OOM mid-run at a particular sample.** Lower `optimization.max_seq_tokens` — over-budget samples are
+**OOM mid-run at a particular sample.** Lower `optimization.max_seq_tokens` - over-budget samples are
 then skipped before the forward pass instead of exploding during it. Check the `skipped_long` counter
 in the logs so you know how much of your data is being dropped.
 
@@ -44,14 +44,14 @@ removes the hooks and collects; do the same in your own code.
 ## Distributed
 
 **DeepSpeed ignores `CUDA_VISIBLE_DEVICES`.** Passing `--num_gpus`/`--include` makes the launcher
-override it — `deepspeed --num_gpus 4` with `CUDA_VISIBLE_DEVICES=4,5,6,7` runs on GPUs **0-3**. Use
+override it - `deepspeed --num_gpus 4` with `CUDA_VISIBLE_DEVICES=4,5,6,7` runs on GPUs **0-3**. Use
 `deepspeed --include localhost:4,5,6,7` instead.
 
 **Training hangs at a collective.** Something diverged between ranks. The usual causes: a skip
 decision made per-rank instead of all-reduced, a validation loop with different sample counts per
 rank, or a loss term that exists on some ranks and not others. All three are handled here (the
 sequence gate is all-reduced, validation uses the global minimum count, and the audio term stays in
-the graph at weight 0) — if you add code, keep those invariants.
+the graph at weight 0) - if you add code, keep those invariants.
 
 **`KeyError: averaged_gradients`.** Something ran between `backward()` and `step()` under ZeRO-3.
 Move it before the forward pass.
@@ -68,7 +68,7 @@ a different adapter configuration fails loudly instead of loading nothing.
 
 **`lora.target_modules entries matched no Linear layer`.** Working as intended. PEFT drops unmatched
 targets silently, so a name that matches nothing shrinks your adapter without telling you. Use
-`to_q`, `to_k`, `to_v`, `to_out.0` (and `ff.net.0.proj`, `ff.net.2` for more capacity) — the names in
+`to_q`, `to_k`, `to_v`, `to_out.0` (and `ff.net.0.proj`, `ff.net.2` for more capacity) - the names in
 the diffusers checkpoint. `to_qkv`, `qkv_proj`, `linear_1`, `linear_2` come from the original MiniMax
 packaging and match nothing here.
 
@@ -78,12 +78,12 @@ by design. Re-encode with audio.
 
 **Loss is noisy and jumps by 10x between steps.** Expected. Loss is strongly sigma-dependent, and each
 step samples a different noise level. Watch the per-sigma validation curves
-(`val/loss_video_u0.3`, `u0.6`, `u0.9`) instead — those are seeded and comparable across steps.
+(`val/loss_video_u0.3`, `u0.6`, `u0.9`) instead - those are seeded and comparable across steps.
 
 **Training runs fine, samples are garbage.** In order of likelihood: (1) the encoding recipe is wrong
-— run `process_dataset.py --decode 3` and *watch* the round-trips; (2) a numeric convention is
-inverted — run `pytest tests/test_flow_matching.py`; (3) the base model is quantized too aggressively
-— see below.
+- run `process_dataset.py --decode 3` and *watch* the round-trips; (2) a numeric convention is
+inverted - run `pytest tests/test_flow_matching.py`; (3) the base model is quantized too aggressively
+- see below.
 
 **An entire epoch executed zero steps.** Every sample exceeded `max_seq_tokens`. Lower the resolution
 bucket or raise the budget; the trainer raises rather than spinning.
@@ -92,7 +92,7 @@ bucket or raise the budget; the trainer raises rather than spinning.
 
 **Output is coloured static.** Decode a tensor of random latents and compare: if it looks the same,
 the transformer produced noise rather than the VAE mis-decoding it. The cause here was 4-bit
-quantization — NF4 fits the model on one 48GB card, but quantizing H3's AdaLN modulation branches to
+quantization - NF4 fits the model on one 48GB card, but quantizing H3's AdaLN modulation branches to
 4 bits destroys generation. Use `--placement shard` (bf16 across GPUs) for anything you intend to
 look at, and keep 4-bit for memory-bound training only.
 
@@ -105,7 +105,7 @@ than the packed layout's index vectors. Use `--placement shard`, which distribut
 the wrong component name. The Ref2VA blocks call it `transformer_ref`, not `transformer`, and
 `update_components` accepts an unknown name without complaint.
 
-**`num_frames … must be between 120 and 360`.** H3 generates 5–15s only. Valid counts: 124, 141, 158,
+**`num_frames … must be between 120 and 360`.** H3 generates 5-15s only. Valid counts: 124, 141, 158,
 175, 192, 209, 226, 243, 260, 277, 294, 311, 328, 345. Training accepts shorter clips; generation
 does not.
 

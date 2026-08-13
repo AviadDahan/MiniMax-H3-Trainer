@@ -4,7 +4,7 @@
 > [untested list](../README.md#untested). Everything unmarked has at least one real run behind it.
 
 Every key of `H3TrainerConfig` ([`src/h3_trainer/config.py`](../src/h3_trainer/config.py)). Unknown
-keys are rejected at load — a typo fails immediately rather than being ignored for six hours.
+keys are rejected at load - a typo fails immediately rather than being ignored for six hours.
 
 Any key can be overridden from the command line:
 
@@ -16,9 +16,9 @@ python scripts/train.py configs/t2va_lora.yaml --set optimization.steps=500 lora
 
 | key | default | notes |
 |---|---|---|
-| `model_path` | — | local diffusers-layout MiniMax-H3 directory; must exist |
+| `model_path` | - | local diffusers-layout MiniMax-H3 directory; must exist |
 | `variant` | `fl2va` | `fl2va` → subfolder `transformer`; `ref2va` → `transformer_ref` |
-| `training_mode` | `lora` | `lora`, `full` ⚠️ (needs `deepspeed_zero3`), `heads` ⚠️ (proj_out only — a pipeline smoke test) |
+| `training_mode` | `lora` | `lora`, `full` ⚠️ (needs `deepspeed_zero3`), `heads` ⚠️ (proj_out only - a pipeline smoke test) |
 | `load_checkpoint` | `null` | checkpoint directory or file; a directory resolves to its latest |
 
 ## `lora`
@@ -85,18 +85,18 @@ path alive.
 | `strategy` | `ddp` | `ddp`, `model_parallel`, `deepspeed_zero2` ⚠️, `deepspeed_zero3` ⚠️ |
 | `deepspeed_config` | `null` | explicit JSON; otherwise generated from this section |
 | `mixed_precision_mode` | `bf16` | `no`, `fp16`, `bf16` |
-| `quantization` | `none` | `nf4-bnb`, `int8-quanto` ⚠️, `fp8-quanto` ⚠️, `int8-bnb` ⚠️ — frozen base only |
+| `quantization` | `none` | `nf4-bnb`, `int8-quanto` ⚠️, `fp8-quanto` ⚠️, `int8-bnb` ⚠️ - frozen base only |
 | `offload_optimizer_during_validation` | `false` | |
 
 **Choosing a strategy** is a memory question first:
 
-* `ddp` — one full replica per GPU. Needs quantization on anything under 80GB, and then only LoRA
+* `ddp` - one full replica per GPU. Needs quantization on anything under 80GB, and then only LoRA
   gradients cross the bus. The fastest option when the model fits.
-* `model_parallel` — a single process holding one copy of the bf16 weights, split by transformer
+* `model_parallel` - a single process holding one copy of the bf16 weights, split by transformer
   block across the GPUs (~8GB each on 8 cards), with the modules that consume the packed layout's
   index vectors pinned to one device. Full precision on small cards; no data parallelism, so raise
   `gradient_accumulation_steps` instead. Launch with plain `python`, not `torchrun`/`deepspeed`.
-* `deepspeed_zero3` — shards weights, gradients and optimizer state. Each rank still constructs the
+* `deepspeed_zero3` - shards weights, gradients and optimizer state. Each rank still constructs the
   whole model *before* partitioning, so it needs cards that can hold 66GB.
 
 Quantization and DeepSpeed ZeRO are mutually exclusive and the config says so: ZeRO partitions and
@@ -110,7 +110,7 @@ evaluate against bf16.
 
 | key | default | notes |
 |---|---|---|
-| `preprocessed_data_root` | — | the `.precomputed` directory |
+| `preprocessed_data_root` | - | the `.precomputed` directory |
 | `num_dataloader_workers` | 2 | |
 | `val_split_every` | 20 | `md5(id) % N == 0` → validation; 0 disables |
 | `shuffle` | `true` | |
@@ -130,8 +130,8 @@ evaluate against bf16.
 | `max_loss_samples` | 8 | |
 | `skip_initial_validation` | `false` | |
 
-**No `negative_prompt`, no CFG scales, no `generate_audio`.** H3 is guidance-distilled — one forward
-per step, no unconditional branch — and video and audio are always generated jointly.
+**No `negative_prompt`, no CFG scales, no `generate_audio`.** H3 is guidance-distilled - one forward
+per step, no unconditional branch - and video and audio are always generated jointly.
 
 ## `checkpoints`
 
@@ -151,7 +151,7 @@ community fused-QKV layout.
 |---|---|---|
 | `timestep_sampling_mode` | `uniform` | `uniform`, `logit_normal`, `shifted_logit_normal` |
 | `timestep_sampling_params` | `{}` | e.g. `{mean: 0.0, std: 1.0, shift: 3.0}` |
-| `video_shift` | 12.0 | **shipped value — changing it desynchronizes training from inference** |
+| `video_shift` | 12.0 | **shipped value - changing it desynchronizes training from inference** |
 | `audio_shift` | 3.0 | ditto |
 
 ## `hub` / `wandb` / global
@@ -170,5 +170,5 @@ stream live instead.
 
 W&B logs `loss`, `loss_video`, `loss_audio`, `audio_weight`, `lr`, `grad_norm`, `sigma_video`,
 `sigma_audio`, `u`, `seq_len`, `steps_per_sec`, `vram_gb`, `skipped_long`, plus validation losses per
-sigma and validation media. The same metrics go to `train.log` and `metrics.jsonl` regardless — a
+sigma and validation media. The same metrics go to `train.log` and `metrics.jsonl` regardless - a
 curve that only exists in the cloud is a curve you can lose.

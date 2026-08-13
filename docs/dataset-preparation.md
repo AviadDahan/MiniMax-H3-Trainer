@@ -24,8 +24,8 @@ video's filename stem.
 | | requirement | why |
 |---|---|---|
 | frame rate | exactly **24.000 fps** | H3's rotary clock counts latent frames; a 25 fps clip used as-is is 4% slow motion, and systematic slow motion is one of the first things a LoRA learns |
-| duration | 5–15s for anything you also want to generate | H3 only generates in that window; shorter clips train but are out of distribution |
-| frames | `17n + 5` — 22, 39, 56, 73, 90, 107, 124, 141, … | what the video VAE encodes |
+| duration | 5-15s for anything you also want to generate | H3 only generates in that window; shorter clips train but are out of distribution |
+| frames | `17n + 5` - 22, 39, 56, 73, 90, 107, 124, 141, … | what the video VAE encodes |
 | resolution | divisible by 32 | VAE 16x, transformer patch 2x |
 | audio | keep the real track | video and audio train jointly; silent tracks teach silence |
 
@@ -39,7 +39,7 @@ ffmpeg -i in.mp4 -vf "fps=24,scale=704:704:force_original_aspect_ratio=increase,
 ffmpeg -i slowmo.mp4 -filter_complex "[0:v]setpts=0.5*PTS[v];[0:a]atempo=2.0[a]" -map "[v]" -map "[a]" out.mp4
 ```
 
-Aim for 50–200 clips for a style or character adapter. Vary everything except the thing you are
+Aim for 50-200 clips for a style or character adapter. Vary everything except the thing you are
 teaching: if the subject is a character, the backgrounds, framing, lighting and action all have to
 move, or the adapter learns the room.
 
@@ -57,21 +57,21 @@ For a character adapter, the tagged form makes the split explicit:
 ```
 
 Pick **one** place for the trigger: either bake it into the captions or pass `--lora-trigger`, never
-both — duplicating it degrades prompt adherence.
+both - duplicating it degrades prompt adherence.
 
 ## Preprocessing
 
 ```bash
 python scripts/process_dataset.py dataset.json \
-    --model-path /data/aviad/models/MiniMax-H3 \
+    --model-path $H3_MODEL_PATH \
     --resolution-bucket 704x704x107 \
     --decode 2
 ```
 
 Two passes run automatically:
 
-1. **media** — both VAEs. Small models; shard it with `torchrun --nproc_per_node 8`.
-2. **text** — the Qwen3-VL-32B conditioner, loaded once and spread across the visible GPUs. It is far
+1. **media** - both VAEs. Small models; shard it with `torchrun --nproc_per_node 8`.
+2. **text** - the Qwen3-VL-32B conditioner, loaded once and spread across the visible GPUs. It is far
    too large to replicate per worker, so it runs on rank 0 for the whole dataset.
 
 Run them separately with `--only media` / `--only text` when you want to schedule them differently.
@@ -84,7 +84,7 @@ block in the prompt presentation), `--references` (IC-LoRA reference media), `--
 
 `.precomputed/decoded_videos/*.mp4` are your clips round-tripped through both VAEs. Watch them with
 sound. If they look and sound right, the encoding recipe is right. If they do not, nothing downstream
-can fix it — and the failure modes (channel order, normalization, framing, planar-vs-interleaved
+can fix it - and the failure modes (channel order, normalization, framing, planar-vs-interleaved
 audio) all produce a training run that looks perfectly healthy.
 
 ## Output
@@ -103,7 +103,7 @@ audio) all produce a training run that looks perfectly healthy.
 Point `data.preprocessed_data_root` at the `.precomputed` directory.
 
 Re-running skips samples that are already cached; `--overwrite` forces re-encoding. Caption
-embeddings are model-specific — if you change the conditioner, re-run the text pass.
+embeddings are model-specific - if you change the conditioner, re-run the text pass.
 
 ## Generating a character dataset
 
@@ -131,14 +131,14 @@ python scripts/extract_pose.py raw/ data/pose --resolution-bucket 448x768x124 --
 python scripts/split_manifest.py data/pose/dataset.json --holdout 4
 python scripts/process_dataset.py data/pose/dataset_train.json \
     --resolution-bucket 448x768x124 --variant ref2va --references \
-    --model-path $H3 --decode 2
+    --model-path $H3_MODEL_PATH --decode 2
 ```
 
 Three things decide whether this works, and none of them are in the trainer:
 
 * **Alignment.** The skeleton is rendered from the same normalized frames as the target, in the same
-  pass, so the two cannot drift. Rendering control videos separately — a different fps assumption, a
-  different frame count — teaches the adapter a constant lag.
+  pass, so the two cannot drift. Rendering control videos separately - a different fps assumption, a
+  different frame count - teaches the adapter a constant lag.
 * **Framing.** The extractor rejects a clip unless a full body is visible for `--min-full-body` of its
   length. A portrait bucket matters for the same reason: a square crop of full-body footage removes
   the ankles, and an adapter that has never seen feet cannot place them.
@@ -148,5 +148,5 @@ Three things decide whether this works, and none of them are in the trainer:
 
 Rejections are worth reading rather than ignoring: on scraped dance footage roughly 40% of clips
 survive the full-body filter, mostly because the framing is a torso close-up. Swap the renderer for
-depth or edge maps and everything downstream is unchanged — the manifest column is still
+depth or edge maps and everything downstream is unchanged - the manifest column is still
 `reference_video`.

@@ -10,11 +10,11 @@ scheduler's forward process is `x_t = t * x0 + (1 - t) * noise`, i.e. the usual
 `x_t = (1 - sigma) * x0 + sigma * noise`.
 
 Feed sigma where t belongs and every sample is labelled with the opposite noise level. The model still
-trains — to invert its own schedule.
+trains - to invert its own schedule.
 
 ## 2. The prediction is a data-ward velocity
 
-H3 predicts `v = x0 - eps`, and the scheduler denoises with `x0 = x_t + (1 - t) * v` — note the plus.
+H3 predicts `v = x0 - eps`, and the scheduler denoises with `x0 = x_t + (1 - t) * v` - note the plus.
 Most flow-matching code regresses `eps - x0`. That sign error trains the model to move *away* from the
 data at every step.
 
@@ -40,13 +40,13 @@ the single most likely place to break joint audio-video training while everythin
 
 ## 4. Silent clips must not train the audio head
 
-A clip with no soundtrack still occupies audio rows in the packed sequence — the geometry is fixed by
+A clip with no soundtrack still occupies audio rows in the packed sequence - the geometry is fixed by
 the video length. Regressing those zero latents teaches the audio head to predict silence (in latent
 space, to predict *noise*).
 
 The fix is to weight the audio term to 0, not to drop it. Dropping the term removes the audio head
 from the autograd graph on some ranks and not others, and DDP/ZeRO then disagree about which gradients
-exist — which shows up as a hang, usually minutes later.
+exist - which shows up as a hang, usually minutes later.
 
 ## 5. Conditioning rows are inputs, not targets
 
@@ -58,9 +58,9 @@ The packed sequence is:
 
 Conditioning rows (keyframes, IC-LoRA references) take part in self-attention in both directions, but:
 
-* **visual** conditioning is noise-augmented to `t = 0.999` (sigma = 0.001) — a whisper of noise, not
+* **visual** conditioning is noise-augmented to `t = 0.999` (sigma = 0.001) - a whisper of noise, not
   clean data, because that is what inference feeds;
-* **reference audio** is passed through completely clean at `t = 1.0` — the inference path applies no
+* **reference audio** is passed through completely clean at `t = 1.0` - the inference path applies no
   augmentation to it;
 * neither ever contributes to the loss.
 
@@ -100,7 +100,7 @@ both; the tags travel in `conditions/<id>.safetensors` as `text_token_tags`.
 | frame count | `17n + 5` → 22, 39, 56, 73, 90, 107, 124, … |
 | latent frames | `5n + 2` |
 | height / width | divisible by 32 (VAE 16x, patch 2x) |
-| duration | **5–15 s** to generate (the pinned pipeline rejects less; MiniMax's own README says 4, the code says 5). Training packs any `17n+5` length, but a clip under 5 s is out of the distribution the model generates. |
+| duration | **5-15 s** to generate (the pinned pipeline rejects less; MiniMax's own README says 4, the code says 5). Training packs any `17n+5` length, but a clip under 5 s is out of the distribution the model generates. |
 | audio | 32 kHz stereo, 40 Hz latent grid, 800 samples per latent |
 | audio rows | channel-major: `[ch0 × N, ch1 × N]`, **not** interleaved |
 
@@ -139,16 +139,16 @@ worth having in one place. Measured on 8×A800-80GB, not reproduced here.
 | measurement | value |
 |---|---|
 | Sequence ceiling, full attention + LoRA + ZeRO-3 | **≈70k tokens** (65k ⇒ 76GB steady; 76k OOMs) |
-| Throughput, 65k-token 30s sequences, LoRA | ~7.5–8 min/step |
+| Throughput, 65k-token 30s sequences, LoRA | ~7.5-8 min/step |
 | Throughput, heads-only at 33k tokens | ~53 s/step |
 | Largest reported run | LoRA over 2,000 ~30s clips at 448×768 |
 
 **Why the conventions on this page are not pedantry.** With the timestep direction and velocity sign
-inverted, they report a heads-only run whose loss *rises* — 7.2 → 9.5 over 10 steps. Corrected, the
-same setup sits at 0.3–1.0, stable over 1000 steps. That is the clearest available evidence that these
+inverted, they report a heads-only run whose loss *rises* - 7.2 → 9.5 over 10 steps. Corrected, the
+same setup sits at 0.3-1.0, stable over 1000 steps. That is the clearest available evidence that these
 details decide whether a run trains at all.
 
-**Sparse attention** — used in H3's final training stage — is **not released**. Training therefore runs
+**Sparse attention** - used in H3's final training stage - is **not released**. Training therefore runs
 full attention, which is what sets the token ceiling above, and it is unlikely to improve.
 
 Two knobs enforce the budget without re-encoding a cache: `H3_MAX_LF` (truncate cached samples to *n*

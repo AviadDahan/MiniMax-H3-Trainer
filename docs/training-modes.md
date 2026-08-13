@@ -1,6 +1,6 @@
 # Training modes
 
-There is one strategy, `flexible`. Every mode below is that strategy with different flags — no mode
+There is one strategy, `flexible`. Every mode below is that strategy with different flags - no mode
 has its own code path. Adding a mode should mean writing a YAML file.
 
 Two questions are asked per modality:
@@ -18,18 +18,18 @@ Two questions are asked per modality:
 
 | mode | config | video | audio | conditions | variant |
 |---|---|---|---|---|---|
-| text → video+audio | [`t2va_lora.yaml`](../configs/t2va_lora.yaml) | generated | generated | — | fl2va |
-| text → video+audio (48GB) | [`t2va_lora_low_vram.yaml`](../configs/t2va_lora_low_vram.yaml) | generated | generated | — | fl2va |
+| text → video+audio | [`t2va_lora.yaml`](../configs/t2va_lora.yaml) | generated | generated | - | fl2va |
+| text → video+audio (48GB) | [`t2va_lora_low_vram.yaml`](../configs/t2va_lora_low_vram.yaml) | generated | generated | - | fl2va |
 | image → video+audio | [`i2v_lora.yaml`](../configs/i2v_lora.yaml) | generated | generated | `first_frame` | fl2va |
-| first+last → video | — | generated | generated | `first_frame`, `last_frame` | fl2va |
-| video → audio | [`v2a_lora.yaml`](../configs/v2a_lora.yaml) | **frozen** | generated | — | fl2va |
-| audio → video | — | generated | **frozen** | — | fl2va |
+| first+last → video | - | generated | generated | `first_frame`, `last_frame` | fl2va |
+| video → audio | [`v2a_lora.yaml`](../configs/v2a_lora.yaml) | **frozen** | generated | - | fl2va |
+| audio → video | - | generated | **frozen** | - | fl2va |
 | IC-LoRA (reference) | [`ref2va_ic_lora.yaml`](../configs/ref2va_ic_lora.yaml) | generated | generated | `reference` | **ref2va** |
 
 ## Text to video + audio
 
 The baseline. Both modalities are generated, so the adapter learns the joint distribution H3 actually
-produces — including what the scene *sounds* like.
+produces - including what the scene *sounds* like.
 
 ```yaml
 training_strategy:
@@ -71,7 +71,7 @@ track.
 
 ## IC-LoRA (in-context reference conditioning)
 
-This is the mode nothing else trains today. It requires `model.variant: ref2va` — the FL2VA
+This is the mode nothing else trains today. It requires `model.variant: ref2va` - the FL2VA
 transformer has no reference rows in its layout.
 
 ```yaml
@@ -101,15 +101,15 @@ What happens at training time:
   video.
 
 H3 accepts up to 9 image, 3 video and 3 audio references per request. An audio reference cannot stand
-alone — it needs at least one visual reference or the prompt to anchor the generation.
+alone - it needs at least one visual reference or the prompt to anchor the generation.
 
 **Reference dropout matters here.** With `probability: 1.0` the adapter only ever sees a reference and
-loses the unconditioned path; 0.8–0.9 keeps both alive. The exception is structural conditioning,
+loses the unconditioned path; 0.8-0.9 keeps both alive. The exception is structural conditioning,
 below.
 
 > **Known gap in dropout.** Dropping removes the reference *rows*, but not the reference from the
 > *prompt*: one embedding is cached per sample and it is built with the references present, labels and
-> vision blocks included. A dropout step therefore describes a reference whose rows are missing —
+> vision blocks included. A dropout step therefore describes a reference whose rows are missing -
 > a state inference cannot produce. The fix is a second cached embedding built without the
 > presentation; until then, `probability: 1.0` is exact and lower values are approximate.
 
@@ -117,7 +117,7 @@ below.
 
 H3 ships no ControlNet and no structural input of any kind. IC-LoRA is the route to one: render the
 control signal as a video, pack it as an in-context reference, and let the adapter learn that the
-target should follow it. Nothing in the packing is special-cased for this — a skeleton video is a
+target should follow it. Nothing in the packing is special-cased for this - a skeleton video is a
 video reference like any other. What changes is how you configure it.
 
 ```yaml
@@ -135,7 +135,7 @@ conditions:
   never sees ankles cannot place feet. A portrait bucket is the point; the worked example uses
   `320x576x124`.
 * **Budget for two clips, and know which canvas you are on.** A reference costs as many rows as the
-  clip it is — 448×768×124 with a matching reference measured 27,364 rows at ~82 s/step on four
+  clip it is - 448×768×124 with a matching reference measured 27,364 rows at ~82 s/step on four
   A6000s, against 9,970 rows at ~19 s for an unconditioned 512×512 clip. Attention over the packed
   sequence is quadratic, so this dominates everything. Note also that `--reference-canvas native`
   (the default, and what inference does) puts the reference on its *own* 768-short-edge canvas
@@ -161,8 +161,8 @@ the GPUs in a single process. See the [configuration reference](configuration-re
 ## Batching
 
 H3's batch axis is a pure replication axis over *one shared layout*: `position_ids`, `token_tags` and
-the index vectors are shared across the batch. Only samples with identical row counts — including
-caption length — can share a micro-batch, which natural captions rarely do.
+the index vectors are shared across the batch. Only samples with identical row counts - including
+caption length - can share a micro-batch, which natural captions rarely do.
 
 `BucketBatchSampler` groups samples by `(video_rows, audio_rows, text_rows, has_audio)` and shuffles
 within and across buckets each epoch. In practice `batch_size: 1` with

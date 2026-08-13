@@ -11,7 +11,7 @@ source scripts/env.sh
 
 `install_env.sh` builds a Python 3.11 venv at `$H3_ROOT/envs/h3` with torch ≥ 2.8, `transformers >= 5.15`
 (4.57 lacks the `mm_token_type_ids` support H3's conditioner needs) and diffusers at the pinned commit
-`abc5e9bf71fd38f53cd471bc3acaa84bc5ecbfdc` — the H3 classes are in no released wheel.
+`abc5e9bf71fd38f53cd471bc3acaa84bc5ecbfdc` - the H3 classes are in no released wheel.
 
 `env.sh` points every cache at `/data` and sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
 before torch is imported. Source it in every shell; the scripts also source it themselves.
@@ -44,7 +44,7 @@ One row per clip, in `.json`, `.jsonl` or `.csv`:
   "caption": "A woman in a red coat walks through rain, speaking: \"not again\"."}]
 ```
 
-Clips should be 5–15s, at exactly 24.000 fps, with their real audio track kept — H3 trains video and
+Clips should be 5-15s, at exactly 24.000 fps, with their real audio track kept - H3 trains video and
 audio jointly, so a silent track teaches silence. `scripts/normalize_clips.py` does the fps,
 resolution and audio normalization for a directory of raw footage:
 
@@ -61,7 +61,7 @@ python scripts/process_dataset.py dataset.json \
     --decode 2
 ```
 
-Two passes run: the VAEs (shardable — add `torchrun --nproc_per_node 8`), then the 32B conditioner
+Two passes run: the VAEs (shardable - add `torchrun --nproc_per_node 8`), then the 32B conditioner
 once, spread across the visible GPUs.
 
 **Look at the `--decode` output.** `.precomputed/decoded_videos/*.mp4` are your clips round-tripped
@@ -85,7 +85,7 @@ deepspeed --num_gpus 8 scripts/train.py configs/t2va_lora.yaml
 `--set key.path=value` overrides any config key from the command line.
 
 Watch `loss_video` and `loss_audio` separately. A total loss that looks healthy while the audio term
-is flat means the audio branch is not learning — the most common way an H3 fine-tune goes quietly
+is flat means the audio branch is not learning - the most common way an H3 fine-tune goes quietly
 wrong.
 
 ## 6. Check the result
