@@ -371,6 +371,13 @@ class ValidationConditionConfig(ConfigBaseModel):
     video: str | None = None
     audio: str | None = None
 
+    @field_validator("image", "video", "audio", mode="before")
+    @classmethod
+    def _expand(cls, value: Any) -> Any:
+        # These are media paths like every other path in the schema; without this
+        # a ${VAR} reaches the pipeline verbatim and fails as a missing file.
+        return str(expand_path(value)) if value is not None else value
+
     @model_validator(mode="after")
     def _exactly_one_medium(self) -> ValidationConditionConfig:
         provided = [x for x in (self.image, self.video, self.audio) if x is not None]
