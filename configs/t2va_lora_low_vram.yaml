@@ -7,14 +7,21 @@
 # of sharding it. The LoRA itself stays in bf16, so nothing being learned is
 # quantized -- only the weights it sits on top of.
 #
-# Why prefer this to ZeRO-3 on a machine without NVLink: ZeRO-3 all-gathers every
-# layer's parameters on every forward, over PCIe. DDP with quantized replicas
-# moves only LoRA gradients (megabytes).
+# Why not ZeRO-3 on 48GB cards: ZeRO-3 partitions *after* each rank has built the
+# model, so every rank needs to hold 66GB first. DDP with quantized replicas also
+# moves only LoRA gradients (megabytes) rather than all-gathering every layer's
+# parameters on every forward, which matters on a PCIe-only machine.
 #
-# The trade-off is fidelity: an NF4 base shifts the output distribution slightly,
-# so an adapter trained here is very marginally off-recipe against a bf16 base.
-# For style/character work that is well inside the noise; for anything precision
-# critical use configs/t2va_lora.yaml with ZeRO-3.
+# The trade-off is real, and larger than "slightly": NF4 quantizes H3's AdaLN
+# modulation branches, and generating from an NF4 base here produced noise
+# indistinguishable from decoding random latents. A LoRA can still be trained
+# against it -- the adapter learns around the quantization -- but you cannot judge
+# the result on the same base, and the adapter is off-recipe against a bf16 one.
+#
+# Prefer configs/character_av_lora.yaml (strategy: model_parallel, full bf16) on
+# 48GB cards. Use this config when you need one full replica per GPU for data
+# parallelism and can accept the quantization; always evaluate with
+# `scripts/generate.py --placement shard`, which is bf16.
 #
 #   torchrun --nproc_per_node 8 scripts/train.py configs/t2va_lora_low_vram.yaml
 # =============================================================================
