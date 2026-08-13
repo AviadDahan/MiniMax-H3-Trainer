@@ -109,6 +109,7 @@ Every mode is the same strategy with different flags — see [docs/training-mode
 | video → audio | [`v2a_lora.yaml`](configs/v2a_lora.yaml) | `video.is_generated: false` |
 | IC-LoRA | [`ref2va_ic_lora.yaml`](configs/ref2va_ic_lora.yaml) | `reference` condition + `variant: ref2va` |
 | low VRAM | [`t2va_lora_low_vram.yaml`](configs/t2va_lora_low_vram.yaml) | NF4 base, DDP replicas |
+| character (48GB) | [`character_av_lora.yaml`](configs/character_av_lora.yaml) | bf16, `model_parallel` |
 
 ## Hardware
 
