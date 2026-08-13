@@ -160,6 +160,11 @@ community fused-QKV layout.
 | `seed` | 42 |
 | `output_dir` | `outputs/h3_lora` |
 
+With no W&B credentials on the machine, `scripts/env.sh` sets `WANDB_MODE=offline` so a detached
+training job never blocks on an interactive login. Offline runs are complete on disk; upload them
+later with `wandb sync $WANDB_DIR/wandb/offline-run-*`. Set `WANDB_API_KEY` (or run `wandb login`) to
+stream live instead.
+
 W&B logs `loss`, `loss_video`, `loss_audio`, `audio_weight`, `lr`, `grad_norm`, `sigma_video`,
 `sigma_audio`, `u`, `seq_len`, `steps_per_sec`, `vram_gb`, `skipped_long`, plus validation losses per
 sigma and validation media. The same metrics go to `train.log` and `metrics.jsonl` regardless — a

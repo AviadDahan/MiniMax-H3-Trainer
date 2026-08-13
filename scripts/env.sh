@@ -39,6 +39,14 @@ export WANDB_CACHE_DIR="$H3_ROOT/caches/wandb/cache"
 export WANDB_CONFIG_DIR="$H3_ROOT/caches/wandb/config"
 export WANDB_ARTIFACT_DIR="$H3_ROOT/caches/wandb/artifacts"
 
+# With no credentials, run W&B offline rather than letting it block on an
+# interactive login (which, on a detached training job, means a run that hangs
+# forever at startup). Offline runs are complete on disk and can be uploaded
+# afterwards with `wandb sync $WANDB_DIR/wandb/offline-run-*`.
+if [ -z "${WANDB_API_KEY:-}" ] && ! grep -qs "api.wandb.ai" "$HOME/.netrc" 2>/dev/null; then
+    export WANDB_MODE="${WANDB_MODE:-offline}"
+fi
+
 # ------------------------------------------------------------------- training
 # Long packed sequences fragment the allocator badly; expandable segments is the
 # difference between a run that fits and one that OOMs at step ~40.
