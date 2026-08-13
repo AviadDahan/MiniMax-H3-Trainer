@@ -5,6 +5,18 @@ MiniMax-H3, and almost everything that can go wrong here goes wrong **silently**
 looks fine, training completes, and the adapter is subtly worthless. Bias toward verifying against
 the pinned diffusers integration rather than reasoning from what flow matching usually does.
 
+## Skills
+
+`.claude/skills/` (mirrored at `.agents/skills/` by symlink, so the two cannot drift) carries two
+skills for driving this repo: `h3-dataset-prep` and `h3-lora-run`. Both are written from this repo's
+own docs and runs.
+
+For H3 *prompt* structure, MiniMax publishes the authoritative guide as a skill in their own
+repository (https://github.com/MiniMax-AI/MiniMax-H3, `.claude/skills/h3-prompt-writing`). It is
+linked rather than vendored: that repo carries no code licence, and its badge points at the model's
+Community Licence, so redistributing it inside an Apache-2.0 repo would misstate its terms. Clone it
+alongside this one if you need it.
+
 ## Environment
 
 ```bash
