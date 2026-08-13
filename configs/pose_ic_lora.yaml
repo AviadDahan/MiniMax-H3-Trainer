@@ -101,6 +101,9 @@ data:
 validation:
   samples:
   - prompt: a person dancing, full body in frame, following the motion of the reference skeleton
+    conditions:
+    - type: reference
+      video: ${H3_DATASETS}/pose_iclora/poses/100475b8384db50e.mp4
   video_dims:
   - 320
   - 576
@@ -109,10 +112,11 @@ validation:
   seed: 42
   inference_steps: 20
   interval: 150
-  # Sampling with a reference goes through scripts/generate.py after training;
-  # in-loop media sampling would hold a second pipeline alongside the sharded
-  # transformer.
-  sample_media: false
+  # Generate from a HELD-OUT skeleton at every checkpoint: a clip that was never
+  # encoded, so following it cannot be memorization. This is the check the loss
+  # cannot make, and it is affordable because validation prompts are encoded
+  # before the transformer is placed (see validation_runner).
+  sample_media: true
   loss_sigmas:
   - 0.3
   - 0.6

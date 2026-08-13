@@ -166,6 +166,10 @@ class H3Trainer:
 
     def setup(self) -> None:
         config = self.config
+        # Validation prompts are encoded before the transformer is placed, while
+        # the 63GB conditioner still has the machine to itself. Afterwards there
+        # is no room for it beside the model on small cards.
+        self._prepare_validation_media()
         use_deepspeed = config.acceleration.strategy.startswith("deepspeed")
         dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "no": torch.float32}[
             config.acceleration.mixed_precision_mode
@@ -551,16 +555,35 @@ class H3Trainer:
 
         self.model.train()
 
-    def _sample_validation_media(self, step: int) -> None:
-        """Generate validation clips with the adapter applied."""
+    def _prepare_validation_media(self) -> None:
+        """Encode the validation prompts once, before the model takes the GPUs."""
+        config = self.config.validation
+        if not (config.sample_media and config.samples) or not self.context.is_main:
+            return
         try:
             from h3_trainer.validation_runner import ValidationRunner
-        except ImportError as exc:  # pragma: no cover
-            logger.warning("Validation sampling unavailable: %s", exc)
-            return
+
+            self._validation_runner = ValidationRunner(self.config, None, self.context.device)
+            self._validation_runner.prepare()
+        except Exception as exc:  # pragma: no cover - never block a run on this
+            logger.warning("Validation media preparation failed (%s); sampling may be skipped", exc)
+            self._validation_runner = None
+
+    def _sample_validation_media(self, step: int) -> None:
+        """Generate validation clips with the adapter applied."""
         if not self.context.is_main:
             return
-        runner = ValidationRunner(self.config, self._core_model(), self.context.device)
+        runner = getattr(self, "_validation_runner", None)
+        if runner is None:
+            try:
+                from h3_trainer.validation_runner import ValidationRunner
+            except ImportError as exc:  # pragma: no cover
+                logger.warning("Validation sampling unavailable: %s", exc)
+                return
+            runner = ValidationRunner(self.config, self._core_model(), self.context.device)
+            self._validation_runner = runner
+        # The model is only available once setup() has run, so bind it here.
+        runner.transformer = self._core_model()
         for index, path in enumerate(runner.run(step)):
             self.run_logger.log_media(
                 f"val/sample_{index}", path, step, caption=self.config.validation.samples[index].prompt[:200]
