@@ -57,6 +57,15 @@ def parse_args() -> argparse.Namespace:
         help="comma-separated keyframe conditioning to encode: first_frame,last_frame",
     )
     parser.add_argument("--references", action="store_true", help="encode IC-LoRA reference media")
+    parser.add_argument(
+        "--reference-canvas",
+        choices=("native", "target"),
+        default="native",
+        help="canvas for reference VIDEOS. 'native' reproduces inference (the reference's own "
+        "aspect at a 768 short edge) and keeps the adapter portable; 'target' reuses the target "
+        "bucket, which is far cheaper but conditions on a geometry inference never produces. "
+        "Reference images always follow the inference recipe.",
+    )
     parser.add_argument("--decode", type=int, default=0, metavar="N", help="VAE round-trip N samples to mp4")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
@@ -110,6 +119,7 @@ def main() -> int:
         lora_trigger=args.lora_trigger,
         keyframes=tuple(k.strip() for k in args.keyframes.split(",") if k.strip()),
         references=args.references,
+        reference_canvas=args.reference_canvas,
         decode_check=args.decode,
         overwrite=args.overwrite,
         device=device,
@@ -126,7 +136,7 @@ def main() -> int:
         media.unload()
         records = _gather(records, rank, world_size)
         if rank == 0:
-            write_index(output, records, geometry)
+            write_index(output, records, geometry, args.reference_canvas)
 
     if args.only in (None, "text"):
         if not records:
@@ -140,7 +150,7 @@ def main() -> int:
         _barrier(world_size)
 
     if rank == 0:
-        index_path = write_index(output, records, geometry)
+        index_path = write_index(output, records, geometry, args.reference_canvas)
         report = verify_cache(output)
         logger.info("Wrote %s with %d samples", index_path, report["num_samples"])
         for problem in report["problems"]:

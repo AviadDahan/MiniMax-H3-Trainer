@@ -45,6 +45,7 @@ from h3_trainer.preprocessing.media import (
     decode_video,
     extract_audio,
     load_image,
+    reference_video_canvas,
     write_video_with_audio,
 )
 
@@ -114,6 +115,14 @@ class ProcessOptions:
     lora_trigger: str | None = None
     keyframes: tuple[str, ...] = ()
     references: bool = False
+    #: Canvas a reference *video* is encoded on. ``native`` reproduces the
+    #: inference recipe -- the reference's own aspect at a 768 short edge -- and
+    #: is what makes an adapter portable to the stock pipeline. ``target`` reuses
+    #: the target bucket, which is far cheaper (a 124-frame native reference is
+    #: tens of thousands of rows on its own) at the cost of conditioning the
+    #: model on a geometry it never sees at inference. Reference *images* always
+    #: follow the inference recipe; only video is affected.
+    reference_canvas: str = "native"
     decode_check: int = 0
     overwrite: bool = False
     device: str = "cuda"
@@ -262,7 +271,11 @@ class MediaPass:
                         "image", image=prepare_reference_image(original, height, width)
                     )
                 elif kind == "video":
-                    clip = decode_video(media, geometry.num_frames, geometry.width, geometry.height)
+                    if self.options.reference_canvas == "native":
+                        width, height = reference_video_canvas(media)
+                    else:
+                        width, height = geometry.width, geometry.height
+                    clip = decode_video(media, geometry.num_frames, width, height)
                     encoded = self.encoders.encode_reference(
                         "video",
                         frames=clip.frames,
@@ -435,8 +448,19 @@ def _read_indexed_record(output: Path, sample_id: str) -> dict[str, Any] | None:
     return None
 
 
-def write_index(output: Path, records: list[dict[str, Any]], geometry: Geometry) -> Path:
-    """Merge records into ``index.json`` (idempotent across reruns and ranks)."""
+def write_index(
+    output: Path,
+    records: list[dict[str, Any]],
+    geometry: Geometry,
+    reference_canvas: str | None = None,
+) -> Path:
+    """Merge records into ``index.json`` (idempotent across reruns and ranks).
+
+    ``reference_canvas`` is recorded because it is baked into the cached rows and
+    cannot be recovered from them: generating with a different canvas than the
+    adapter was trained on hands the model a reference of the wrong row count and
+    rotary grid, and nothing about the resulting output announces why it is bad.
+    """
     index_path = output / "index.json"
     existing: dict[str, dict[str, Any]] = {}
     if index_path.exists():
@@ -464,6 +488,7 @@ def write_index(output: Path, records: list[dict[str, Any]], geometry: Geometry)
     payload = {
         "version": 1,
         "geometry": str(geometry),
+        "reference_canvas": reference_canvas,
         "num_samples": len(samples),
         "num_trainable": len(samples) - len(incomplete),
         "samples": samples,

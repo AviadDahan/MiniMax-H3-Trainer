@@ -30,6 +30,7 @@ from h3_trainer.constants import (
     AUDIO_SAMPLE_RATE,
     MINIMAX_H3_AUDIO_CHANNELS,
     MINIMAX_H3_FPS,
+    resolve_canvas_size,
 )
 
 
@@ -51,6 +52,32 @@ def probe_fps(path: str | Path) -> float:
         stream = container.streams.video[0]
         rate = stream.average_rate or stream.guessed_rate
         return float(rate) if rate else float(MINIMAX_H3_FPS)
+
+
+def probe_dimensions(path: str | Path) -> tuple[int, int]:
+    """Source ``(width, height)`` in pixels, before any scaling."""
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        return int(stream.codec_context.width), int(stream.codec_context.height)
+
+
+def reference_video_canvas(path: str | Path) -> tuple[int, int]:
+    """The ``(width, height)`` H3 puts this reference video on at inference.
+
+    A reference never inherits the target's geometry: the pipeline resolves a
+    canvas from the reference's *own* aspect ratio, short edge 768, and LANCZOS
+    resizes onto it (`prepare_reference_frames` upstream). Encoding a reference
+    at the target bucket instead changes its row count and its rotary spatial
+    grid, so an adapter trained that way is conditioned on a layout the pipeline
+    will never hand it.
+
+    That fidelity is expensive — a 124-frame reference on a 768-short-edge canvas
+    is tens of thousands of rows — which is why the canvas is selectable rather
+    than simply hardcoded. See ``--reference-canvas``.
+    """
+    width, height = probe_dimensions(path)
+    canvas_height, canvas_width = resolve_canvas_size(width, height)
+    return canvas_width, canvas_height
 
 
 def cover_fit(image: Image.Image, width: int, height: int) -> Image.Image:

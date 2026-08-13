@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--last-image", type=Path, default=None, help="last frame (fl2va)")
     parser.add_argument("--reference-image", type=Path, action="append", default=[])
     parser.add_argument("--reference-video", type=Path, action="append", default=[])
+    parser.add_argument(
+        "--reference-canvas",
+        choices=("native", "target"),
+        default="native",
+        help="must match what the adapter was trained with (process_dataset.py --reference-canvas)",
+    )
     parser.add_argument("--reference-audio", type=Path, action="append", default=[])
     return parser.parse_args()
 
@@ -97,6 +103,7 @@ def main() -> int:
         image=args.image,
         last_image=args.last_image,
         references=references,
+        reference_canvas=args.reference_canvas,
     )
 
     pipeline = H3Pipeline(

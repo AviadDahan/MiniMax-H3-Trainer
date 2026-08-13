@@ -67,6 +67,11 @@ class GenerationRequest:
     image: str | Path | None = None
     last_image: str | Path | None = None
     references: list[dict[str, Any]] = field(default_factory=list)
+    #: Canvas a reference *video* is encoded on -- ``native`` (the inference
+    #: recipe: the reference's own aspect at a 768 short edge) or ``target``
+    #: (the generated bucket). This must match what the adapter was trained
+    #: against; a mismatch changes the reference's row count and rotary grid.
+    reference_canvas: str = "native"
 
     @property
     def uses_references(self) -> bool:
@@ -200,7 +205,7 @@ class H3Pipeline:
         from PIL import Image
 
         from h3_trainer.packing import noise_condition_rows
-        from h3_trainer.preprocessing.media import decode_video, extract_audio
+        from h3_trainer.preprocessing.media import decode_video, extract_audio, reference_video_canvas
 
         prepared: list[MiniMaxH3PreparedReference] = []
         video_rows, audio_rows = [], []
@@ -214,9 +219,11 @@ class H3Pipeline:
                 encoded = encoders.encode_reference("image", image=image)
                 media.append(("image", image))
             elif entry.get("video"):
-                clip = decode_video(
-                    entry["video"], request.geometry.num_frames, request.geometry.width, request.geometry.height
-                )
+                if request.reference_canvas == "native":
+                    width, height = reference_video_canvas(entry["video"])
+                else:
+                    width, height = request.geometry.width, request.geometry.height
+                clip = decode_video(entry["video"], request.geometry.num_frames, width, height)
                 waveform = extract_audio(entry["video"], request.geometry.num_frames)
                 encoded = encoders.encode_reference("video", frames=clip.frames, waveform=waveform)
                 media.append(("frames", np.asarray(clip.frames, dtype=np.uint8)))
