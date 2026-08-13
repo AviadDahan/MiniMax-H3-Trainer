@@ -22,14 +22,22 @@
 #   * a portrait bucket. Square crops of full-body footage cut the legs off, and
 #     a pose adapter that never sees ankles cannot place feet.
 #
+# The bucket is 320x576 rather than something sharper, and that is a throughput
+# decision rather than a quality one. A reference costs as many rows as the
+# target, and attention over the packed sequence is unmasked and quadratic:
+# 448x768x124 with a reference measured 27,364 rows at ~82 s/step on 4 A6000s,
+# where 320x576x124 comes in near 15.8k rows. Frames cannot be traded away
+# instead -- H3 generates 124 frames (5.17 s) at the short end.
+#
 # Data comes from scripts/extract_pose.py, which renders MediaPipe skeletons
 # frame-aligned with their source clips and rejects anything not showing a full
 # body. Preprocess with the reference column wired up:
 #
 #   python scripts/extract_pose.py raw/ /data/aviad/datasets/pose_iclora \
 #       --resolution-bucket 448x768x124
-#   python scripts/process_dataset.py /data/aviad/datasets/pose_iclora/dataset.json \
-#       --resolution-buckets 448x768x124 --variant ref2va --references
+#   python scripts/split_manifest.py /data/aviad/datasets/pose_iclora/dataset.json --holdout 4
+#   python scripts/process_dataset.py /data/aviad/datasets/pose_iclora/dataset_train.json \
+#       --resolution-bucket 320x576x124 --variant ref2va --references
 #   python scripts/train.py configs/pose_ic_lora.yaml
 # =============================================================================
 
@@ -74,10 +82,10 @@ optimization:
   scheduler_type: linear
   warmup_steps: 30
   enable_gradient_checkpointing: true
-  # A 448x768x124 target plus a reference of the same geometry is roughly twice
-  # the sequence of the character run. The gate is set above the observed length
-  # so nothing is silently skipped; raise it if extraction changes the bucket.
-  max_seq_tokens: 40000
+  # A 320x576x124 target plus a reference of the same geometry measures 15,834
+  # rows. The gate sits above that so nothing is silently skipped; raise it if
+  # you move to a larger bucket.
+  max_seq_tokens: 24000
 acceleration:
   # ZeRO-3 cannot start on 48GB cards (each rank materializes 66GB before
   # partitioning). model_parallel splits the blocks across GPUs instead.
@@ -86,7 +94,7 @@ acceleration:
   quantization: none
   offload_optimizer_during_validation: false
 data:
-  preprocessed_data_root: /data/aviad/datasets/pose_iclora/.precomputed
+  preprocessed_data_root: /data/aviad/datasets/pose_iclora/.precomputed320
   num_dataloader_workers: 2
   val_split_every: 10
   shuffle: true
@@ -94,8 +102,8 @@ validation:
   samples:
   - prompt: a person dancing, full body in frame, following the motion of the reference skeleton
   video_dims:
-  - 448
-  - 768
+  - 320
+  - 576
   - 124
   frame_rate: 24.0
   seed: 42
