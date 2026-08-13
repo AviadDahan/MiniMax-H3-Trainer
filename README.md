@@ -439,4 +439,19 @@ straightforwardly dual-use.
 
 ## 📄 License
 
-Apache-2.0. The MiniMax-H3 weights are governed by the MiniMax H3 Community License Agreement.
+**This code: Apache-2.0.** Written for this repository; no source was taken from either reference
+project. `ltx-trainer` informed the *shape* of the config schema and the single-strategy design, which
+the acknowledgements state plainly, and MiniMax-H3-FineTuning contributed *facts about the model*
+recorded in [docs/h3-quirks.md](docs/h3-quirks.md). Neither contributed code.
+
+Dependencies are permissive (Apache-2.0, BSD, MIT), including the pinned diffusers commit.
+
+**Things this licence does not cover:**
+
+| | governed by |
+|---|---|
+| the MiniMax-H3 weights | [MiniMax H3 Community License Agreement](https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE) |
+| adapters you train, and anything H3 generates - including the demo clips in `docs/demo/` | the same agreement, as model output |
+| datasets you build | whatever licence the source footage carries; scraped video usually is not yours to redistribute |
+
+The banner at the top is MiniMax's, hotlinked from their model card rather than redistributed.
