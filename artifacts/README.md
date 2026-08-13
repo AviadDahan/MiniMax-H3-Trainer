@@ -19,6 +19,8 @@ bash scripts/collect_artifacts.sh
 | `character-run/` | the live character run: `checkpoint-*`, `eval_*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `character-dataset/` | anchor, 36 clips, manifest, `.precomputed` latent cache |
 | `runs/` | every run directory |
+| `pose-run/` | the pose IC-LoRA run: `checkpoint-*`, `train.log`, `metrics.jsonl`, `wandb/` |
+| `pose-dataset/` | 97 skeleton/footage pairs, the train/held-out split, and the `.precomputed320` cache |
 
 Finished, static evidence (`inference/`, `verification/`, `smoke-runs/`) is copied, so it survives if
 the run directories are cleaned up. Media and weights are gitignored; this file is the committed index.
@@ -56,6 +58,23 @@ The synthetic character AV LoRA experiment. Paths below are relative to `charact
 **Reading the A/B sheets:** top row is the base model, bottom row is the same seed with the adapter.
 Samples 0 and 1 use the `OHWXMIRA` trigger; sample 2 (a retriever) is a control for prompt-adherence
 collapse.
+
+## `pose-run/` and `pose-dataset/` (symlinks)
+
+The skeleton-conditioned IC-LoRA experiment - the first structural control adapter on H3.
+
+| path | contents |
+|---|---|
+| `pose-dataset/targets/` | 97 clips normalized to the bucket, kept from 200 source videos |
+| `pose-dataset/poses/` | the matching MediaPipe skeleton renders, frame-aligned with their targets |
+| `pose-dataset/rejected.json` | why each rejected clip was dropped (mostly torso-only framing) |
+| `pose-dataset/dataset_train.json` / `dataset_heldout.json` | 92 / 5 split; the held-out clips are never encoded, so a generation from one of their skeletons cannot be memorization |
+| `pose-dataset/.precomputed320/` | the latent cache at 320x576x124, with `reference_canvas` recorded in `index.json` |
+| `pose-run/` | `train.log`, `metrics.jsonl`, `wandb/`, and `checkpoint-*` every 150 steps |
+
+Read the curve with `python scripts/plot_metrics.py artifacts/pose-run`; the raw one is unreadable
+because the sigma draw dominates. Sequence length is 14,884 rows: 6,660 target video, 6,660 skeleton
+reference, 414 audio, 1,150 text.
 
 ## `verification/`
 
