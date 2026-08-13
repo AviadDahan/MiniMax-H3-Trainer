@@ -18,7 +18,8 @@ bash scripts/collect_artifacts.sh
 |---|---|
 | `character-run/` | the live character run: `checkpoint-*`, `eval_*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `character-dataset/` | anchor, 36 clips, manifest, `.precomputed` latent cache |
-| `runs/` | every run directory |
+| `runs/` | **every** run directory, including the smoke and feasibility runs not listed below |
+| `datasets/` | every dataset directory, raw and cached |
 | `pose-run/` | the pose IC-LoRA run: `checkpoint-*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `pose-dataset/` | 97 skeleton/footage pairs, the train/held-out split, and the `.precomputed320` cache |
 
