@@ -369,11 +369,11 @@ Trained on 92 skeleton/footage pairs at 320x576x124, rank 32. The reference belo
 clip that was never encoded, so following it cannot be memorization:
 
 <p align="center">
-  <img src="docs/demo/iclora_skeleton_following.png" alt="skeleton, then generations at step 150 and step 300" width="540">
+  <img src="docs/demo/iclora_skeleton_following.png" alt="a held-out skeleton and the video generated from it" width="720">
 </p>
 
-<sub>Top: the held-out skeleton. Middle: generated at step 150. Bottom: step 300. Same reference, same
-seed.</sub>
+<sub>Top: the held-out skeleton. Bottom: generated from it at 576x1024. The adapter trained at
+320x576, so the control transfers to resolutions it never saw.</sub>
 
 **The control.** Give the *base* model the same skeleton and the same seed with
 no adapter, and it reproduces the skeleton rather than generating anything from it. The adapter is
