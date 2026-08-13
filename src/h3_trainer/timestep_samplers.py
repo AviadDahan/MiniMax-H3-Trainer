@@ -33,6 +33,15 @@ class UniformTimestepSampler(TimestepSampler):
     The default clamp mirrors the reference H3 trainer: the endpoints are both
     degenerate (u=0 is clean data, u=1 is pure noise) and contribute gradients
     that are either trivial or enormous.
+
+    One consequence is worth stating rather than leaving implicit. Inference
+    *does* evaluate the model at the excluded endpoint: the sigma grid is
+    ``linspace(1, 0, N)``, so the first step runs at u=1 exactly (t=0, pure
+    noise). Training with this clamp therefore never sees the first step of a
+    generation. At 50 steps the second point is t=0.0017, which u_max=0.98
+    reproduces closely, so the gap is one step in fifty -- but if a fine-tune
+    shows artefacts that appear only in the first denoising step, raise
+    ``max_u`` to 1.0 before looking anywhere else.
     """
 
     def __init__(self, min_u: float = 0.02, max_u: float = 0.98) -> None:

@@ -21,6 +21,7 @@ try:
         MINIMAX_H3_CANVAS_MULTIPLE,
         MINIMAX_H3_FPS,
         MINIMAX_H3_FRAMES_PER_CHUNK,
+        MINIMAX_H3_KEYFRAME_ENCODE_SEED,
         MINIMAX_H3_KEYFRAME_NOISE_AUG,
         MINIMAX_H3_LATENTS_PER_CHUNK,
         MINIMAX_H3_MAX_DURATION,
@@ -61,6 +62,11 @@ AUDIO_SAMPLE_RATE = AUDIO_SAMPLES_PER_LATENT * MINIMAX_H3_AUDIO_LATENTS_PER_SECO
 #: t = 1 - sigma, so 0.999 means "almost clean, with a whisper of noise aug".
 CONDITION_TIMESTEP = MINIMAX_H3_KEYFRAME_NOISE_AUG
 
+#: Seed for the posterior sample taken when encoding conditioning media. Fixed
+#: upstream, not a request seed -- re-exported rather than restated so a change
+#: there cannot leave training conditioning on latents inference never sees.
+CONDITION_ENCODE_SEED = MINIMAX_H3_KEYFRAME_ENCODE_SEED
+
 #: Default shifts of the two rectified-flow schedules. Video and audio are noised
 #: at *different* sigmas drawn from the same uniform u -- see flow_matching.py.
 DEFAULT_VIDEO_SHIFT = 12.0
@@ -69,6 +75,7 @@ DEFAULT_AUDIO_SHIFT = 3.0
 __all__ = [
     "AUDIO_SAMPLES_PER_LATENT",
     "AUDIO_SAMPLE_RATE",
+    "CONDITION_ENCODE_SEED",
     "CONDITION_TIMESTEP",
     "DEFAULT_AUDIO_SHIFT",
     "DEFAULT_VIDEO_SHIFT",

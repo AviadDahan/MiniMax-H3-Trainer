@@ -11,6 +11,10 @@ requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 
 dependencies = [
+    # H3's classes are in no released diffusers wheel, so the integration commit is
+    # pinned as a direct reference. Without this line an install of this package
+    # produces an environment where h3_trainer.constants raises on import.
+    "diffusers @ git+https://github.com/huggingface/diffusers.git@abc5e9bf71fd38f53cd471bc3acaa84bc5ecbfdc",
     "torch>=2.8",
     "torchaudio",
     "torchvision",

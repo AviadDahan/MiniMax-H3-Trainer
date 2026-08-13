@@ -37,7 +37,6 @@ from h3_trainer.packing import encode_reference_geometry
 from h3_trainer.preprocessing.media import frames_to_pixel_tensor
 
 #: The seed H3 encodes conditioning latents under, fixed in the released pipeline.
-KEYFRAME_ENCODE_SEED = 42
 
 
 @dataclass
@@ -113,7 +112,7 @@ class H3Encoders:
         pixels = self._normalize_pixels(frames_to_pixel_tensor(frames))
         moments = self.vae._encode_clip(pixels) if is_image else self.vae._encode(pixels)
         posterior = DiagonalGaussianDistribution(moments)
-        latents = posterior.sample(generator=torch.Generator().manual_seed(KEYFRAME_ENCODE_SEED))
+        latents = posterior.sample(generator=torch.Generator().manual_seed(CONDITION_ENCODE_SEED))
         # The float16 round-trip is part of the contract, not an optimization.
         latents = latents.to(torch.float16).float().cpu()
         geometry = (int(latents.shape[2]), int(latents.shape[3]), int(latents.shape[4]))
