@@ -208,8 +208,20 @@ the obvious one. Measured on 8×A6000 (no NVLink):
 | `ddp` + `int8-quanto` | ~33GB | tight | little room for activations at real resolutions |
 | `deepspeed_zero3` | ~8GB after partition | **no** | each rank holds all 66GB *before* partitioning. Fine on 80GB cards. |
 
-Model-parallel runs blocks **sequentially**, so extra GPUs buy memory, not speed (~19 s/step either
-way). The reason to use fewer GPUs per run is *concurrency* — four 2-GPU runs instead of one 4-GPU run.
+Model-parallel runs blocks **sequentially**, so extra GPUs buy memory, not speed. The reason to use
+fewer GPUs per run is *concurrency* — four 2-GPU runs instead of one 4-GPU run.
+
+**Sequence length is the cost driver, and it is quadratic.** Attention has no mask over the packed
+sequence, so everything attends to everything. Measured on 4 GPUs:
+
+| what | rows | VRAM/GPU | step |
+|---|---|---|---|
+| 512×512×124, no reference | 9,970 | 23 GB | ~19 s |
+| 448×768×124 **+ a reference video** | 27,364 | 31 GB | ~82 s |
+
+A reference costs as many rows as the target it conditions, so an IC-LoRA sequence is roughly twice a
+plain one before resolution is even considered — and 2.7× the rows came out at 4.3× the time. Plan
+control-adapter runs around a bucket you can afford, not the largest one that fits in memory.
 
 > **4-bit is for training, not for looking at.** NF4 fits the model on one card, but quantizing H3's
 > AdaLN branches destroys generation — an NF4 sample here decoded to noise indistinguishable from
@@ -229,7 +241,7 @@ What has actually been measured on this hardware, not claims:
 | IC-LoRA packing | a reference image contributes 4,096 rows to an 8,741-row sequence; loss over the 448 target rows only |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | trigger flips output to the learned concept while a control prompt is unchanged; see [Demo](#demo) |
-| Unit tests | 31 passing |
+| Unit tests | 46 passing |
 
 ---
 
