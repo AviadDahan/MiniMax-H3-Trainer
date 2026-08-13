@@ -1,4 +1,4 @@
-# Driving MiniMax H3 Trainer
+# Driving MiniMax H3 Agentic Trainer
 
 How to *use* this repo. [AGENTS.md](AGENTS.md) is the companion for *changing* it — invariants,
 layout, and the traps that have cost time here. Read that one before editing code.

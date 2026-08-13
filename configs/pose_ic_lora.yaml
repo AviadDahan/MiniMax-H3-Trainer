@@ -134,7 +134,7 @@ hub:
   hub_model_id: null
 wandb:
   enabled: true
-  project: minimax-h3-trainer
+  project: minimax-h3-agentic-trainer
   entity: null
   name: pose-ic-lora
   tags:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MiniMax H3 Trainer environment.
+# MiniMax H3 Agentic Trainer environment.
 #
 # Everything this project touches -- HuggingFace weights, torch/triton kernel caches,
 # pip/uv wheels, wandb spool -- is redirected onto /data so $HOME never gets bloated.

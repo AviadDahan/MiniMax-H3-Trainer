@@ -1,4 +1,4 @@
-# Working on MiniMax H3 Trainer
+# Working on MiniMax H3 Agentic Trainer
 
 Notes for coding agents. The short version: this repo trains LoRA and IC-LoRA adapters on
 MiniMax-H3, and almost everything that can go wrong here goes wrong **silently** — the loss curve

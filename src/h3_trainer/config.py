@@ -1,4 +1,4 @@
-"""The MiniMax H3 Trainer configuration schema.
+"""The MiniMax H3 Agentic Trainer configuration schema.
 
 The section layout deliberately mirrors LTX-2's ``ltx-trainer`` -- ``model``,
 ``lora``, ``training_strategy``, ``optimization``, ``acceleration``, ``data``,
@@ -465,7 +465,7 @@ class HubConfig(ConfigBaseModel):
 
 class WandbConfig(ConfigBaseModel):
     enabled: bool = False
-    project: str = "minimax-h3-trainer"
+    project: str = "minimax-h3-agentic-trainer"
     entity: str | None = None
     name: str | None = None
     tags: list[str] = Field(default_factory=list)

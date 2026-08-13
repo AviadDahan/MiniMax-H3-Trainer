@@ -4,13 +4,13 @@
   <img width="100%" src="https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/assets/minimax-h3.png" alt="MiniMax-H3">
 </a>
 
-# MiniMax H3 Trainer
+# MiniMax H3 Agentic Trainer
 
-**An agent-friendly trainer for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
+**LoRA and IC-LoRA training for MiniMax-H3 — the open-weight 33B model that generates video *and* synchronized stereo audio.**
 
-*LoRA and IC-LoRA, in a repo built so that a coding agent can run it without tribal knowledge: every
-capability labelled tested or untested, every model-specific convention written down and pinned by a
-test, and the failure modes made loud instead of silent.*
+*Agentic because it is built to be driven without tribal knowledge: every capability labelled tested
+or untested, every model-specific convention written down and pinned by a test, and the failure modes
+made loud instead of silent.*
 
 [![Base model](https://img.shields.io/badge/base%20model-MiniMax--H3-blue)](https://huggingface.co/MiniMaxAI/MiniMax-H3)
 [![Agents](https://img.shields.io/badge/agents-AGENTS.md-purple)](AGENTS.md)

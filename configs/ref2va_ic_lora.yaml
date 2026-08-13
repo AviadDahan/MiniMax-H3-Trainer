@@ -105,7 +105,7 @@ hub:
   hub_model_id: null
 wandb:
   enabled: false
-  project: minimax-h3-trainer
+  project: minimax-h3-agentic-trainer
   entity: null
   name: null
   tags:

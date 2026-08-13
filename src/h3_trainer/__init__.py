@@ -1,4 +1,4 @@
-"""MiniMax H3 Trainer — LoRA / IC-LoRA training for MiniMax-H3.
+"""MiniMax H3 Agentic Trainer — LoRA / IC-LoRA training for MiniMax-H3.
 
 MiniMax-H3 is an omni-modal rectified-flow transformer that generates video and
 synchronized stereo audio in a single packed sequence. Everything in this package

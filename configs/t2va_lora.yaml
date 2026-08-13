@@ -129,7 +129,7 @@ hub:
 
 wandb:
   enabled: false
-  project: minimax-h3-trainer
+  project: minimax-h3-agentic-trainer
   entity: null
   name: null
   tags: [h3, lora, t2va]

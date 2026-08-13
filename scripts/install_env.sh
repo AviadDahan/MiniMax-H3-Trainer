@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create the MiniMax H3 Trainer python environment at $H3_ROOT/envs/h3.
+# Create the MiniMax H3 Agentic Trainer python environment at $H3_ROOT/envs/h3.
 #
 # MiniMax-H3's diffusers classes (MiniMaxH3Transformer3DModel, AutoencoderKLMiniMaxH3,
 # the minimax_h3 modular pipeline + packing helpers) are not in any released diffusers

@@ -12,7 +12,7 @@ license_name: minimax-h3-community-license
 # {{ADAPTER_NAME}}
 
 A LoRA for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3), trained with
-[MiniMax H3 Trainer](https://github.com/{{REPO}}).
+[MiniMax H3 Agentic Trainer](https://github.com/{{REPO}}).
 
 {{ONE_PARAGRAPH_DESCRIPTION}}
 
@@ -36,7 +36,7 @@ branch as well. An adapter trained video-only will not change what a scene sound
 ComfyUI: drop `{{FILENAME}}.safetensors` into `models/loras/` and load it between the model loader and
 the sampler. The file is in the community fused-QKV layout.
 
-With MiniMax H3 Trainer:
+With MiniMax H3 Agentic Trainer:
 
 ```bash
 python scripts/generate.py \

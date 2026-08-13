@@ -159,7 +159,7 @@ community fused-QKV layout.
 | key | default |
 |---|---|
 | `hub.push_to_hub` ⚠️ / `hub.hub_model_id` | `false` / `null` |
-| `wandb.enabled` / `project` / `entity` / `name` / `tags` / `log_validation_videos` | `false` / `minimax-h3-trainer` / `null` / `null` / `[]` / `true` |
+| `wandb.enabled` / `project` / `entity` / `name` / `tags` / `log_validation_videos` | `false` / `minimax-h3-agentic-trainer` / `null` / `null` / `[]` / `true` |
 | `seed` | 42 |
 | `output_dir` | `outputs/h3_lora` |
 
