@@ -163,6 +163,21 @@ community fused-QKV layout.
 | `seed` | 42 |
 | `output_dir` | `outputs/h3_lora` |
 
+`output_dir` is the **root**, not the run directory. Each launch writes to
+`<output_dir>/<UTC timestamp>/` — for example `outputs/h3_lora/20260814-130354/` — holding that
+launch's `train.log`, `metrics.jsonl`, `wandb/`, `checkpoint-*` and `validation/`. A `latest` symlink
+beside them points at the newest, so tooling has a stable path:
+
+```bash
+python scripts/plot_metrics.py outputs/h3_lora/latest
+```
+
+Runs here take hours and get relaunched — after a crash, a config change, a corrected estimate.
+Sharing one directory means the second launch overwrites the first's log, appends to the same
+metrics file, and leaves checkpoints from two different configurations side by side with nothing to
+tell them apart. Every rank derives the same timestamp (the minimum across ranks), so a distributed
+run does not scatter itself across sibling directories.
+
 With no W&B credentials on the machine, `scripts/env.sh` sets `WANDB_MODE=offline` so a detached
 training job never blocks on an interactive login. Offline runs are complete on disk; upload them
 later with `wandb sync $WANDB_DIR/wandb/offline-run-*`. Set `WANDB_API_KEY` (or run `wandb login`) to

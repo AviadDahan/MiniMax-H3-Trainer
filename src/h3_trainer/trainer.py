@@ -23,6 +23,7 @@ import json
 import math
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -133,13 +134,54 @@ def deepspeed_config(config: H3TrainerConfig) -> dict[str, Any]:
 
 
 class H3Trainer:
+    """Trains one adapter. ``config.output_dir`` is the *root*; each launch gets
+    its own timestamped directory beneath it.
+
+    Runs are hours long and get relaunched -- after a crash, a config change, or a
+    corrected estimate. Writing every launch into one directory means the second
+    one overwrites the first's ``train.log`` and interleaves its ``metrics.jsonl``,
+    and checkpoints from different configurations end up side by side with nothing
+    to tell them apart. Keeping each launch separate makes runs comparable and
+    makes it safe to relaunch without hand-moving the previous attempt out of the
+    way first.
+    """
+
+    def _new_run_dir(self, root: Path) -> Path:
+        """``<root>/<UTC timestamp>``, identical on every rank.
+
+        Ranks cannot each call ``time.time()``: they start milliseconds apart and
+        would land in different directories, so rank 1 would write checkpoints
+        where rank 0 never looks. Reducing to the minimum makes every rank adopt
+        the earliest clock, which is a value they can all agree on without adding
+        a broadcast.
+        """
+        stamp = self.context.all_reduce_min(int(time.time()))
+        return root / datetime.fromtimestamp(stamp, tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+    def _point_latest_at(self, run_dir: Path) -> None:
+        """A stable path to the newest run, for tooling and symlinks elsewhere.
+
+        Without it every consumer -- plot_metrics, the artifacts/ links, an
+        evaluation script -- would need to know the timestamp of the run it wants.
+        """
+        latest = run_dir.parent / "latest"
+        try:
+            if latest.is_symlink() or latest.exists():
+                latest.unlink()
+            latest.symlink_to(run_dir.name)
+        except OSError as exc:  # a filesystem without symlinks should not end a run
+            logger.warning("could not update %s: %s", latest, exc)
+
     def __init__(self, config: H3TrainerConfig) -> None:
         self.config = config
         self.context = DistributedContext(config.acceleration.strategy)
         self.state = TrainingState()
-        self.output_dir = Path(config.output_dir)
+        self.run_root = Path(config.output_dir)
+        self.output_dir = self._new_run_dir(self.run_root)
         if self.context.is_main:
             self.output_dir.mkdir(parents=True, exist_ok=True)
+            self._point_latest_at(self.output_dir)
+        self.context.barrier()
 
         torch.manual_seed(config.seed + self.context.rank)
         self.strategy = get_training_strategy(config.training_strategy)

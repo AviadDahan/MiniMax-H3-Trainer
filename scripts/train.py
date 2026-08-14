@@ -77,6 +77,9 @@ def main() -> int:
         )
 
     trainer = H3Trainer(config)
+    if trainer.context.is_main:
+        # config.output_dir is the root; this launch has its own directory under it.
+        logger.info("run directory: %s (also reachable as %s/latest)", trainer.output_dir, config.output_dir)
     trainer.setup()
     trainer.train()
     return 0
