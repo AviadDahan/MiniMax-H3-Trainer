@@ -293,6 +293,11 @@ class ValidationRunner:
                         output_type="np",
                         **self._conditioning_kwargs(sample),
                     )
+                # Inside the guard on purpose. Writing the clip is the cheapest
+                # step here and the likeliest to raise on a type mismatch, and a
+                # sample that generated correctly and then failed on the way to
+                # disk used to take thirteen hours of training down with it.
+                outputs.append(self._write(result, step, index))
             except TimeoutError:
                 # Sampling this slowly means it is not running where it should be.
                 # Twice now a misplaced component sent denoising to the CPU, where a
@@ -310,9 +315,8 @@ class ValidationRunner:
                 )
                 break
             except Exception as exc:
-                logger.warning("Validation sample %d failed: %s", index, exc)
+                logger.error("Validation sample %d failed: %s", index, exc, exc_info=True)
                 continue
-            outputs.append(self._write(result, step, index))
 
         if was_training:
             self.transformer.train()
@@ -355,7 +359,7 @@ class ValidationRunner:
         if frames is None:
             raise RuntimeError("Validation pipeline returned no video")
 
-        frames = np.asarray(frames)
+        frames = _to_numpy(frames)
         if frames.ndim == 5:
             frames = frames[0]
         if frames.dtype != np.uint8:
@@ -363,11 +367,23 @@ class ValidationRunner:
 
         waveform = None
         if audio is not None:
-            waveform = torch.as_tensor(np.asarray(audio)).float()
+            waveform = torch.as_tensor(_to_numpy(audio)).float()
             waveform = waveform.reshape(-1) if waveform.ndim == 1 else waveform.reshape(waveform.shape[-2], -1)
 
         path = self.output_dir / f"step{step:07d}_sample{index}.mp4"
         return write_video_with_audio(frames, path, waveform=waveform, fps=self.config.validation.frame_rate)
+
+
+def _to_numpy(value) -> np.ndarray:
+    """Whatever the pipeline returned, as a host-side array.
+
+    ``output_type="np"`` converts the video but not the audio, which comes back
+    as a CUDA tensor -- and ``np.asarray`` on one of those raises rather than
+    copying, so a sample that generated perfectly well died on the way to disk.
+    """
+    if isinstance(value, torch.Tensor):
+        return value.detach().to("cpu", torch.float32).numpy()
+    return np.asarray(value)
 
 
 def _extract(result, names: tuple[str, ...]):
