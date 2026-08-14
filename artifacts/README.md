@@ -18,12 +18,12 @@ bash scripts/collect_artifacts.sh
 |---|---|
 | `character-run/` | the live character run: `checkpoint-*`, `eval_*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `character-dataset/` | anchor, 36 clips, manifest, `.precomputed` latent cache |
-| `pose-run/` | the pose IC-LoRA run: `checkpoint-*`, `train.log`, `metrics.jsonl`, `wandb/` |
+| `runs/` | every run directory. The pose IC-LoRA is `runs/pose_wan_ic_lora/latest/`; `runs/pose_wan_ic_lora_step150/figures/` holds the adapter-vs-base pair from step 150 |
 | `pose-dataset/` | 46 skeleton/footage pairs from synthetic dancers, the split, and the `.precomputed448` cache |
-| `pose-run-champ-withheld/` | the earlier pose run, kept only so the published figures can be traced. **Its weights are not for release** - see below |
 
-There are deliberately no blanket `runs/` or `datasets/` links. `artifacts/` reads as curated output,
-and pointing it at every directory on the machine surfaced training data that must not ship.
+`runs/pose_ic_lora/` is the earlier pose run. It produced the figures in the top-level README, so it is
+kept for traceability, but **its weights are not for release** - see below. Nothing under `artifacts/`
+except this file is committed, so these links are local conveniences and never reach a clone.
 
 Finished results (`inference/`, `verification/`, `smoke-runs/`) are copied, so they survive if
 the run directories are cleaned up. Media and weights are gitignored; this file is the committed index.
@@ -62,7 +62,7 @@ The synthetic character AV LoRA experiment. Paths below are relative to `charact
 Samples 0 and 1 use the `OHWXMIRA` trigger; sample 2 (a retriever) is a control for prompt-adherence
 collapse.
 
-## `pose-run/` and `pose-dataset/` (symlinks)
+## the pose IC-LoRA (symlinks)
 
 The skeleton-conditioned IC-LoRA - the first structural control adapter on H3, and the releasable
 version of it.
@@ -80,13 +80,13 @@ weight 0.
 | `pose-dataset/heldout_poses/` `heldout_targets/` | **an entire person** (`ref02`), never cut into the manifest and never encoded. Following one of these skeletons cannot be memorization |
 | `pose-dataset/dataset_train.json` / `dataset_heldout.json` | 46 / 4 split on top of that |
 | `pose-dataset/.precomputed448/` | the latent cache at 448x768x124, with `reference_canvas` recorded in `index.json` |
-| `pose-run/` | `train.log`, `metrics.jsonl`, `wandb/`, and `checkpoint-*` every 150 steps |
+| `runs/pose_wan_ic_lora/latest/` | `train.log`, `metrics.jsonl`, `wandb/`, `checkpoint-*` and `validation/` every 150 steps |
 
-Read the curve with `python scripts/plot_metrics.py artifacts/pose-run`; the raw one is unreadable
+Read the curve with `python scripts/plot_metrics.py artifacts/runs/pose_wan_ic_lora/latest`; the raw one is unreadable
 because the sigma draw dominates. Sequence length is 27,360 rows: 12,432 target video, 12,432 skeleton
 reference, 414 audio, and the caption.
 
-### `pose-run-champ-withheld/`
+### `runs/pose_ic_lora/` - withheld
 
 The run that first demonstrated the mechanism, at 320x576. It is kept here because the figures in the
 top-level README were produced from it and a claim should be traceable to the thing that produced it.
