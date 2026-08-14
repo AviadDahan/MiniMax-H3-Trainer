@@ -151,6 +151,18 @@ validation:
   # fell back to CPU. Fixed in validation_runner, covered by
   # tests/test_validation_transformer_component.py.
   sample_media: true
+  # An hour, not the 30-minute default, because a validation sample here is much
+  # larger than a training step. The ref2va blocks put a video reference on the
+  # 768-short-edge canvas of its OWN aspect ratio, never on the target's: the
+  # 448x768 skeleton resolves to 768x1312 and contributes 36,408 reference rows,
+  # so a sample packs ~55,000 rows against the 27,364 a training step sees. The
+  # cache was built with reference_canvas=target because native at training time
+  # costs ~5x the step time and blows the token gate -- the same train/inference
+  # mismatch the Champ run had, where following still worked.
+  #
+  # The watchdog is still worth having at this size: CPU denoising is ~100x
+  # slower, so it trips this budget regardless.
+  sample_timeout_seconds: 3600
   loss_sigmas:
   - 0.3
   - 0.6

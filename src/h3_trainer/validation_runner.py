@@ -105,11 +105,7 @@ class ValidationRunner:
             )
             prepared = []
             for sample in samples:
-                references = [
-                    {"image": c.image, "video": c.video, "audio": c.audio}
-                    for c in sample.conditions
-                    if c.type == "reference"
-                ]
+                references = self._prepared_references(sample)
                 if references:
                     embeds, tags = encoders.encode_ref2va_prompt(sample.prompt, references)
                 else:
@@ -118,15 +114,66 @@ class ValidationRunner:
             self._conditioning = prepared
             logger.info("Validation prompts encoded; the conditioner is not needed again this run")
         except Exception as exc:
-            logger.warning(
-                "Could not pre-encode validation prompts (%s). Sampling will fall back to encoding "
-                "in-loop, which needs the 63GB conditioner alongside the transformer.",
+            # Loud, and with the traceback. The fallback is not a mild degradation:
+            # it needs the 63GB conditioner resident alongside a transformer that
+            # already fills the cards, so in practice it OOMs or lands the encoder
+            # on the CPU, where a single sample runs past any useful budget.
+            logger.error(
+                "Could not pre-encode validation prompts (%s). Sampling falls back to encoding in-loop, "
+                "which needs the 63GB conditioner alongside the transformer and usually cannot fit.",
                 exc,
+                exc_info=True,
             )
             self._conditioning = None
         finally:
             if encoders is not None:
                 encoders.unload()
+
+    def _reference_requests(self, sample) -> list:
+        """A sample's reference conditions as ref2va *request* objects.
+
+        These carry paths. Decoding happens inside the dataclass, so building one
+        is also what validates that the media exists and is readable.
+        """
+        from diffusers.modular_pipelines.minimax_h3.packing_ref2va import MiniMaxH3Reference
+
+        return [
+            MiniMaxH3Reference(image=condition.image, video=condition.video, audio=condition.audio)
+            for condition in sample.conditions
+            if condition.type == "reference"
+        ]
+
+    def _prepared_references(self, sample) -> list:
+        """Resolve a sample's references the way the ref2va blocks resolve theirs.
+
+        ``encode_ref2va_prompt`` needs *prepared* references: a ``kind``, decoded
+        pixels, and the ``block_timestamps`` it fills in as it samples the vision
+        blocks. Request objects -- and, before this, bare dicts -- carry none of
+        that, and the presentation cannot be built without it. Handing dicts over
+        raised ``'dict' object has no attribute 'kind'``, which was swallowed into
+        the in-loop fallback: the pipeline then loaded the 63GB conditioner on the
+        CPU and one sample ran past 1800 s.
+
+        The resolve is the blocks' own static method rather than a copy of it. The
+        rules it encodes -- 24 fps resample, the 768 canvas of the reference's own
+        aspect ratio, truncation to the generated frame count -- have to match what
+        the pipeline will do at sampling time, and a second implementation here
+        would only match until diffusers changed one of them.
+        """
+        requests = self._reference_requests(sample)
+        if not requests:
+            return []
+        from types import SimpleNamespace
+
+        from diffusers.modular_pipelines.minimax_h3.before_encoder import MiniMaxH3Ref2VASetupStep
+
+        from h3_trainer.constants import AUDIO_SAMPLE_RATE
+
+        _, _, num_frames = sample.video_dims or self.config.validation.video_dims
+        # Only consulted for a reference that carries its own soundtrack.
+        components = SimpleNamespace(audio_sampling_rate=AUDIO_SAMPLE_RATE)
+        prepared, _ = MiniMaxH3Ref2VASetupStep.prepare_references(components, requests, num_frames)
+        return prepared
 
     def _build_pipeline(self):
         if self._pipeline is not None:
@@ -154,9 +201,13 @@ class ValidationRunner:
 
         pipeline = blocks.init_pipeline(str(self.config.model.model_path))
         pipeline.load_components(names=names, dtype=torch.bfloat16)
-        for name in ("vae", "audio_vae"):
+        # `text_encoder` is only in `names` on the fallback path, and load_components
+        # leaves what it loads on the CPU. Left there the conditioner still *works*,
+        # which is the trap: it produces correct embeddings roughly a hundred times
+        # too slowly, so the run looks hung rather than misconfigured.
+        for name in ("vae", "audio_vae", "text_encoder"):
             component = getattr(pipeline, name, None)
-            if component is not None:
+            if component is not None and hasattr(component, "to"):
                 setattr(pipeline, name, component.to(self.device))
         # The transformer is already resident and carries the weights under test.
         #
@@ -283,20 +334,12 @@ class ValidationRunner:
         from PIL import Image
 
         kwargs: dict = {}
-        references = []
         for condition in sample.conditions:
             if condition.type == "first_frame":
                 kwargs["image"] = Image.open(condition.image).convert("RGB")
             elif condition.type == "last_frame":
                 kwargs["last_image"] = Image.open(condition.image).convert("RGB")
-            elif condition.type == "reference":
-                from diffusers.modular_pipelines.minimax_h3.packing_ref2va import MiniMaxH3Reference
-
-                references.append(
-                    MiniMaxH3Reference(
-                        image=condition.image, video=condition.video, audio=condition.audio
-                    )
-                )
+        references = self._reference_requests(sample)
         if references:
             kwargs["references"] = references
         return kwargs
