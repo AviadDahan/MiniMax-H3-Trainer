@@ -13,7 +13,9 @@ layout, and the traps that have cost time here. Read that one before editing cod
 | turn footage into a dataset | [docs/dataset-preparation.md](docs/dataset-preparation.md) |
 | understand *why* the numerics look unusual | [docs/h3-quirks.md](docs/h3-quirks.md) |
 | diagnose an OOM, a hang, or output that is subtly wrong | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| know whether a capability has actually been run | the [untested list](README.md#untested) |
+| generate, A/B an adapter, export to ComfyUI | [docs/inference.md](docs/inference.md) |
+| choose an acceleration strategy, or budget a run | [docs/hardware.md](docs/hardware.md) |
+| know whether a capability has actually been run | the [untested list](docs/hardware.md#untested) |
 | see what a finished run looks like | [artifacts/README.md](artifacts/README.md) |
 
 **`⚠️` in the docs means implemented but never run.** It is not decoration. If a task depends on a

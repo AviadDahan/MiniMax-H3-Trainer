@@ -12,6 +12,7 @@ Every config is the same `flexible` strategy with different flags. See
 | [`i2v_lora.yaml`](./i2v_lora.yaml) | image → video+audio | `deepspeed_zero3` | `first_frame` conditioning |
 | [`v2a_lora.yaml`](./v2a_lora.yaml) | video → audio | `deepspeed_zero3` | video frozen, audio generated |
 | [`ref2va_ic_lora.yaml`](./ref2va_ic_lora.yaml) | IC-LoRA | `deepspeed_zero3` | `reference` conditioning; requires `variant: ref2va` |
+| [`pose_ic_lora.yaml`](./pose_ic_lora.yaml) | IC-LoRA, structural control | `model_parallel` | skeleton video as the reference; `probability: 1.0` |
 
 Pick the one closest to your task, change `model.model_path`, `data.preprocessed_data_root` and
 `output_dir`, and override anything else from the command line:
@@ -21,6 +22,6 @@ python scripts/train.py configs/character_av_lora.yaml \
     --set optimization.steps=2000 lora.rank=32 wandb.enabled=true
 ```
 
-**Choosing an acceleration strategy** is mostly a memory question — the table in the
-[README](../README.md#hardware) has the measured numbers. On 48GB cards, `model_parallel` is the only
-way to train against a full-precision base.
+**Choosing an acceleration strategy** is mostly a memory question — the table in
+[docs/hardware.md](../docs/hardware.md) has the measured numbers. On 48GB cards, `model_parallel` is
+the only way to train against a full-precision base.

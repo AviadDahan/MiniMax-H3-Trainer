@@ -1,7 +1,7 @@
 # Configuration reference
 
 > ⚠️ marks an option that is implemented and reachable but has **never been run**. See the
-> [untested list](../README.md#untested). Everything unmarked has at least one real run behind it.
+> [untested list](hardware.md#untested). Everything unmarked has at least one real run behind it.
 
 Every key of `H3TrainerConfig` ([`src/h3_trainer/config.py`](../src/h3_trainer/config.py)). Unknown
 keys are rejected at load - a typo fails immediately rather than being ignored for six hours.
