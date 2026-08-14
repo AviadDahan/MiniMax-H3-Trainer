@@ -22,6 +22,9 @@ is the same two-stage split `inference.py` uses.
 
 from __future__ import annotations
 
+import signal
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +36,36 @@ from h3_trainer.constants import Geometry
 from h3_trainer.preprocessing.media import write_video_with_audio
 
 
+@contextmanager
+def time_budget(seconds: int):
+    """Abandon the wrapped call if it outlives its budget.
+
+    SIGALRM fires in the main thread between Python-level operations, which is
+    where a diffusers denoising loop spends its time, so a sampler that has
+    wandered onto the CPU can still be interrupted. Outside the main thread (or on
+    a platform without SIGALRM) this is a no-op rather than an error: a missing
+    watchdog should not stop a run from training.
+    """
+    if seconds <= 0 or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    try:
+        previous = signal.signal(signal.SIGALRM, _raise_timeout)
+    except (ValueError, AttributeError):  # no SIGALRM here
+        yield
+        return
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _raise_timeout(signum, frame):
+    raise TimeoutError("validation sample exceeded its time budget")
+
+
 class ValidationRunner:
     def __init__(self, config: H3TrainerConfig, transformer: torch.nn.Module, device: torch.device) -> None:
         self.config = config
@@ -42,6 +75,8 @@ class ValidationRunner:
         self._pipeline = None
         #: prompt embeddings + per-row tags per validation sample, filled by prepare()
         self._conditioning: list[dict] | None = None
+        #: set when a sample blows its budget; keeps later checkpoints from paying it again
+        self._sampling_disabled = False
 
     def prepare(self) -> None:
         """Encode every validation prompt once, then release the conditioner.
@@ -173,7 +208,7 @@ class ValidationRunner:
     @torch.no_grad()
     def run(self, step: int) -> list[Path]:
         config = self.config.validation
-        if not config.samples:
+        if not config.samples or self._sampling_disabled:
             return []
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -196,16 +231,33 @@ class ValidationRunner:
             geometry = Geometry.create(width=width, height=height, num_frames=frames)
             seed = sample.seed if sample.seed is not None else config.seed
             try:
-                result = pipeline(
-                    **self._prompt_kwargs(index, sample),
-                    height=geometry.height,
-                    width=geometry.width,
-                    num_frames=geometry.num_frames,
-                    num_inference_steps=config.inference_steps,
-                    generator=torch.Generator(device="cpu").manual_seed(seed),
-                    output_type="np",
-                    **self._conditioning_kwargs(sample),
+                with time_budget(config.sample_timeout_seconds):
+                    result = pipeline(
+                        **self._prompt_kwargs(index, sample),
+                        height=geometry.height,
+                        width=geometry.width,
+                        num_frames=geometry.num_frames,
+                        num_inference_steps=config.inference_steps,
+                        generator=torch.Generator(device="cpu").manual_seed(seed),
+                        output_type="np",
+                        **self._conditioning_kwargs(sample),
+                    )
+            except TimeoutError:
+                # Sampling this slowly means it is not running where it should be.
+                # Twice now a misplaced component sent denoising to the CPU, where a
+                # 448x768x124 clip does not finish in any useful time, and training
+                # sat blocked behind it -- once for 1h50m before anyone looked.
+                # Give up on media for the rest of the run rather than pay this at
+                # every remaining checkpoint; the loss validation still runs.
+                self._sampling_disabled = True
+                logger.error(
+                    "Validation sample %d exceeded %ds and was abandoned; media sampling is now OFF "
+                    "for the rest of this run. Training continues. A sample this slow usually means "
+                    "the denoiser is not on the GPU.",
+                    index,
+                    config.sample_timeout_seconds,
                 )
+                break
             except Exception as exc:
                 logger.warning("Validation sample %d failed: %s", index, exc)
                 continue

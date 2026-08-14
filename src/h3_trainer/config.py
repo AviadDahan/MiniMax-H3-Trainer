@@ -414,6 +414,12 @@ class ValidationConfig(ConfigBaseModel):
     inference_steps: int = Field(default=30, ge=1)
     interval: int | None = Field(default=250, description="Steps between validations; null disables.")
     skip_initial_validation: bool = False
+    sample_timeout_seconds: int = Field(
+        default=1800,
+        description="abandon a validation sample that outlives this, and stop sampling for the run. "
+        "0 disables the watchdog. A sample that runs far past its budget means the denoiser is not "
+        "on the GPU, and training is blocked behind it until it finishes.",
+    )
     sample_media: bool = Field(
         default=True,
         description="Run real generation. Turning this off keeps the cheap held-out loss and skips the "
