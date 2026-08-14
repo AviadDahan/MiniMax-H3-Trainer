@@ -22,29 +22,42 @@
 #   * a portrait bucket. Square crops of full-body footage cut the legs off, and
 #     a pose adapter that never sees ankles cannot place feet.
 #
-# The bucket is 320x576 rather than something sharper, and that is a throughput
-# decision rather than a quality one. A reference costs as many rows as the
-# target, and attention over the packed sequence is unmasked and quadratic:
-# 448x768x124 with a reference measured 27,364 rows at ~82 s/step on 4 A6000s,
-# where 320x576x124 measures 14,884 rows at ~24-37 s/step. Frames cannot be
-# traded away instead -- H3 generates 124 frames (5.17 s) at the short end.
+# The bucket is 448x768, and that costs real time. A reference costs as many rows
+# as the target, and attention over the packed sequence is unmasked and quadratic:
+# 448x768x124 with a reference measures 27,364 rows at ~82 s/step on 4 A6000s,
+# where 320x576x124 measures 14,884 rows at ~24-37 s/step. So 600 steps is roughly
+# 14 hours rather than 5. Frames cannot be traded away instead -- H3 generates 124
+# frames (5.17 s) at the short end.
 #
-# A sharper bucket is the planned next run, and it is worth budgeting honestly:
-# 448x768 is ~3.4x the step time, so 600 steps goes from roughly 5 hours to
-# nearly 14. Output softness at 320x576 is mostly this choice, not the adapter --
-# H3's own canvas is 768 on the short edge, so generating below it is off
-# distribution for the base model too.
+# It is worth the time. An earlier run of this config at 320x576 followed skeletons
+# correctly but rendered them softly, and that softness is the bucket rather than
+# the adapter: H3's own canvas is 768 on the short edge, so generating below it is
+# off distribution for the base model too.
 #
-# Data comes from scripts/extract_pose.py, which renders MediaPipe skeletons
-# frame-aligned with their source clips and rejects anything not showing a full
-# body. Preprocess with the reference column wired up:
+# WHERE THE DATA COMES FROM, and why it is not the obvious source. Public dance
+# datasets are scraped footage of people who did not consent to train anything, so
+# an adapter fitted to them cannot be released. Every frame behind this config is
+# generated instead: eight synthetic people from H3 itself, set dancing by
+# Wan-Dancer (Apache-2.0), which is a different model -- generating the targets
+# with H3 would be self-distillation and would teach the adapter only H3's own
+# distribution back. The clips are muxed silent, so the driving music never enters
+# the weights.
 #
-#   python scripts/extract_pose.py raw/ ${H3_DATASETS}/pose_iclora \
+# Then scripts/extract_pose.py renders MediaPipe skeletons frame-aligned with
+# their source clips and rejects anything not showing a full body:
+#
+#   python scripts/normalize_clips.py dances/ ${H3_DATASETS}/pose_wan/clips \
+#       --resolution-bucket 448x768x124 --stride 1.7 --drop-audio
+#   python scripts/extract_pose.py ${H3_DATASETS}/pose_wan/clips ${H3_DATASETS}/pose_wan \
 #       --resolution-bucket 448x768x124
-#   python scripts/split_manifest.py ${H3_DATASETS}/pose_iclora/dataset.json --holdout 4
-#   python scripts/process_dataset.py ${H3_DATASETS}/pose_iclora/dataset_train.json \
-#       --resolution-bucket 320x576x124 --variant ref2va --references
+#   python scripts/split_manifest.py ${H3_DATASETS}/pose_wan/dataset.json --holdout 4
+#   python scripts/process_dataset.py ${H3_DATASETS}/pose_wan/dataset_train.json \
+#       --resolution-bucket 448x768x124 --references --reference-canvas target
 #   python scripts/train.py configs/pose_ic_lora.yaml
+#
+# One whole person -- ref02 -- is held out of all of that. Validation generates
+# from a skeleton of someone the adapter has never seen, dancing a pairing it has
+# never seen, which is a stronger claim than a held-out clip of a familiar dancer.
 # =============================================================================
 
 model:
@@ -82,16 +95,25 @@ optimization:
   learning_rate: 0.0001
   steps: 600
   batch_size: 1
-  gradient_accumulation_steps: 4
+  # 1, not 4. The cost of a run is sample-passes, not optimizer steps: one pass
+  # over a 27,364-row sample measures ~81 s on 4 A6000s, so accumulating 4 of them
+  # makes a single step cost 324 s -- measured, across three consecutive steps --
+  # and 600 steps then runs 54 hours rather than the 14 the per-pass figure
+  # suggests. At batch 1 the same 600 steps are 600 passes in ~13.5 h, trading
+  # gradient smoothing for four times as many updates. Standard for LoRA, and with
+  # only 40 training samples the extra epochs bought by accumulation are closer to
+  # overfitting than to signal.
+  gradient_accumulation_steps: 1
   max_grad_norm: 1.0
   optimizer_type: adamw
   scheduler_type: linear
   warmup_steps: 30
   enable_gradient_checkpointing: true
-  # A 320x576x124 target plus a reference of the same geometry measures 15,834
-  # rows. The gate sits above that so nothing is silently skipped; raise it if
-  # you move to a larger bucket.
-  max_seq_tokens: 24000
+  # A 448x768x124 target plus a reference of the same geometry measures 27,364
+  # rows. The gate sits above that so nothing is silently skipped -- and it must
+  # move whenever the bucket does. Left at the 320x576 value of 24000 this gate
+  # skips every sample in the dataset and the run trains on nothing, quietly.
+  max_seq_tokens: 30000
 acceleration:
   # ZeRO-3 cannot start on 48GB cards (each rank materializes 66GB before
   # partitioning). model_parallel splits the blocks across GPUs instead.
@@ -100,7 +122,7 @@ acceleration:
   quantization: none
   offload_optimizer_during_validation: false
 data:
-  preprocessed_data_root: ${H3_DATASETS}/pose_iclora/.precomputed320
+  preprocessed_data_root: ${H3_DATASETS}/pose_wan/.precomputed448
   num_dataloader_workers: 2
   val_split_every: 10
   shuffle: true
@@ -109,10 +131,10 @@ validation:
   - prompt: a person dancing, full body in frame, following the motion of the reference skeleton
     conditions:
     - type: reference
-      video: ${H3_DATASETS}/pose_iclora/poses/100475b8384db50e.mp4
+      video: ${H3_DATASETS}/pose_wan/heldout_poses/ref02_latin_00.mp4
   video_dims:
-  - 320
-  - 576
+  - 448
+  - 768
   - 124
   frame_rate: 24.0
   seed: 42
@@ -122,13 +144,19 @@ validation:
   # encoded, so following it cannot be memorization. This is the check the loss
   # cannot make, and it is affordable because validation prompts are encoded
   # before the transformer is placed (see validation_runner).
+  #
+  # This was briefly disabled after it appeared to hang for 1h50m. The cause was a
+  # bug, not a hardware limit: the runner handed the pipeline its transformer under
+  # the wrong component name, so the adapter never reached the sampler and denoising
+  # fell back to CPU. Fixed in validation_runner, covered by
+  # tests/test_validation_transformer_component.py.
   sample_media: true
   loss_sigmas:
   - 0.3
   - 0.6
   - 0.9
   max_loss_samples: 6
-  skip_initial_validation: false
+  skip_initial_validation: true
 checkpoints:
   interval: 150
   keep_last_n: 5
@@ -146,11 +174,11 @@ wandb:
   enabled: true
   project: minimax-h3-agentic-trainer
   entity: null
-  name: pose-ic-lora
+  name: pose-ic-lora-wan
   tags:
   - h3
   - ic-lora
   - pose
   log_validation_videos: true
 seed: 42
-output_dir: ${H3_RUNS}/pose_ic_lora
+output_dir: ${H3_RUNS}/pose_wan_ic_lora

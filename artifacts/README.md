@@ -18,10 +18,12 @@ bash scripts/collect_artifacts.sh
 |---|---|
 | `character-run/` | the live character run: `checkpoint-*`, `eval_*`, `train.log`, `metrics.jsonl`, `wandb/` |
 | `character-dataset/` | anchor, 36 clips, manifest, `.precomputed` latent cache |
-| `runs/` | **every** run directory, including the smoke and feasibility runs not listed below |
-| `datasets/` | every dataset directory, raw and cached |
 | `pose-run/` | the pose IC-LoRA run: `checkpoint-*`, `train.log`, `metrics.jsonl`, `wandb/` |
-| `pose-dataset/` | 97 skeleton/footage pairs, the train/held-out split, and the `.precomputed320` cache |
+| `pose-dataset/` | 46 skeleton/footage pairs from synthetic dancers, the split, and the `.precomputed448` cache |
+| `pose-run-champ-withheld/` | the earlier pose run, kept only so the published figures can be traced. **Its weights are not for release** - see below |
+
+There are deliberately no blanket `runs/` or `datasets/` links. `artifacts/` reads as curated output,
+and pointing it at every directory on the machine surfaced training data that must not ship.
 
 Finished results (`inference/`, `verification/`, `smoke-runs/`) are copied, so they survive if
 the run directories are cleaned up. Media and weights are gitignored; this file is the committed index.
@@ -62,20 +64,36 @@ collapse.
 
 ## `pose-run/` and `pose-dataset/` (symlinks)
 
-The skeleton-conditioned IC-LoRA experiment - the first structural control adapter on H3.
+The skeleton-conditioned IC-LoRA - the first structural control adapter on H3, and the releasable
+version of it.
+
+**Every frame behind this run is generated.** Eight synthetic people from H3 itself, set dancing by
+Wan-Dancer (Apache-2.0) at 480x832, cut to 448x768x124. Nobody real appears in the training data, and
+the driving music never reaches the weights: clips are muxed silent, so the audio branch trains at
+weight 0.
 
 | path | contents |
 |---|---|
-| `pose-dataset/targets/` | 97 clips normalized to the bucket, kept from 200 source videos |
+| `pose-dataset/targets/` | 50 clips: 61 cut from 6 generated dances at a 1.7 s stride, 3 rejected for framing, 8 held out with `ref02` |
 | `pose-dataset/poses/` | the matching MediaPipe skeleton renders, frame-aligned with their targets |
-| `pose-dataset/rejected.json` | why each rejected clip was dropped (mostly torso-only framing) |
-| `pose-dataset/dataset_train.json` / `dataset_heldout.json` | 92 / 5 split; the held-out clips are never encoded, so a generation from one of their skeletons cannot be memorization |
-| `pose-dataset/.precomputed320/` | the latent cache at 320x576x124, with `reference_canvas` recorded in `index.json` |
+| `pose-dataset/rejected.json` | the 3 drops and why (limbs leaving frame mid-move) |
+| `pose-dataset/heldout_poses/` `heldout_targets/` | **an entire person** (`ref02`), never cut into the manifest and never encoded. Following one of these skeletons cannot be memorization |
+| `pose-dataset/dataset_train.json` / `dataset_heldout.json` | 46 / 4 split on top of that |
+| `pose-dataset/.precomputed448/` | the latent cache at 448x768x124, with `reference_canvas` recorded in `index.json` |
 | `pose-run/` | `train.log`, `metrics.jsonl`, `wandb/`, and `checkpoint-*` every 150 steps |
 
 Read the curve with `python scripts/plot_metrics.py artifacts/pose-run`; the raw one is unreadable
-because the sigma draw dominates. Sequence length is 14,884 rows: 6,660 target video, 6,660 skeleton
-reference, 414 audio, 1,150 text.
+because the sigma draw dominates. Sequence length is 27,360 rows: 12,432 target video, 12,432 skeleton
+reference, 414 audio, and the caption.
+
+### `pose-run-champ-withheld/`
+
+The run that first demonstrated the mechanism, at 320x576. It is kept here because the figures in the
+top-level README were produced from it and a claim should be traceable to the thing that produced it.
+
+**Its weights are not published and should not be.** It was fitted to scraped dance footage whose
+subjects never consented, one of them apparently a child. The pipeline and the findings survive that;
+the weights do not. The dataset it used is not linked from `artifacts/` at all.
 
 ## `verification/`
 
