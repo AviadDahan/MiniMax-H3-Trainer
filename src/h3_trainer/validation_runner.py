@@ -124,9 +124,51 @@ class ValidationRunner:
             if component is not None:
                 setattr(pipeline, name, component.to(self.device))
         # The transformer is already resident and carries the weights under test.
-        pipeline.update_components(transformer=self.transformer)
+        #
+        # The component is named per variant -- `transformer` for fl2va, but
+        # `transformer_ref` for ref2va -- and `update_components` DROPS any keyword
+        # it does not recognize, with only a warning. Passing the wrong name leaves
+        # the pipeline holding its own transformer: untrained, and never placed on
+        # a device, so sampling runs on CPU and a 448x768x124 clip never finishes.
+        # That looks exactly like a hang, and it means every media sample would
+        # have been of the base model rather than the adapter. Resolve the name
+        # from the pipeline itself and refuse to continue if it is absent.
+        name = self._transformer_component_name(pipeline)
+        pipeline.update_components(**{name: self.transformer})
+        if getattr(pipeline, name, None) is not self.transformer:
+            raise RuntimeError(
+                f"validation pipeline kept its own {name!r} after update_components; "
+                "the adapter under test would not be the thing sampled"
+            )
         self._pipeline = pipeline
         return pipeline
+
+    def _transformer_component_name(self, pipeline) -> str:
+        """Which component holds the denoiser, as this pipeline names it.
+
+        Asks the pipeline rather than trusting the variant, then cross-checks
+        against the name the config expects. The two disagreeing means the blocks
+        changed shape underneath us, which is worth failing on -- this bug existed
+        because the mapping was written out by hand here while
+        ``ModelConfig.transformer_subfolder`` and ``inference.py`` already knew it.
+        """
+        specs = getattr(pipeline, "_component_specs", {})
+        expected = self.config.model.transformer_subfolder
+        if expected in specs:
+            return expected
+        for candidate in ("transformer_ref", "transformer"):
+            if candidate in specs:
+                logger.warning(
+                    "validation pipeline names its denoiser %r, not %r as the %s variant implies",
+                    candidate,
+                    expected,
+                    self.config.model.variant,
+                )
+                return candidate
+        raise RuntimeError(
+            f"no transformer component in the validation pipeline; it declares {sorted(specs)}. "
+            "Sampling cannot test the adapter without one."
+        )
 
     @torch.no_grad()
     def run(self, step: int) -> list[Path]:
@@ -138,7 +180,12 @@ class ValidationRunner:
         try:
             pipeline = self._build_pipeline()
         except Exception as exc:
-            logger.warning("Could not build the validation pipeline (%s); skipping media sampling", exc)
+            # Not fatal -- a broken sampler should not end a run that is otherwise
+            # training correctly -- but it is an error, not a warning. Logged at
+            # warning level this scrolled past unread while the run produced no
+            # media at all, which is indistinguishable from a run that was never
+            # asked to.
+            logger.error("Validation media sampling is BROKEN and will be skipped: %s", exc, exc_info=True)
             return []
 
         was_training = self.transformer.training
