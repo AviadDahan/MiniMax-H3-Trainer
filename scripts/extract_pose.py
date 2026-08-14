@@ -66,6 +66,28 @@ def draw_line(canvas: np.ndarray, p0, p1, colour, thickness: int = 4) -> None:
         canvas[max(0, y + lo) : min(height, y + hi), max(0, x + lo) : min(width, x + hi)] = colour
 
 
+def draw_point(canvas: np.ndarray, x: float, y: float, radius: int = 3) -> None:
+    """A joint marker, clamped to the canvas on BOTH ends.
+
+    MediaPipe happily predicts landmarks outside the frame -- an arm reaching past
+    the edge gives a negative x -- and a negative slice bound is not out of range
+    in numpy, it counts back from the far edge. ``canvas[0 : x + 4]`` with x = -300
+    is not an empty slice but almost the whole width, so a single off-frame joint
+    painted a white bar clean across the skeleton.
+
+    Those bars went into the training data and into the reference the adapter is
+    conditioned on, which is worse than cosmetic: a band spanning the frame is a
+    strong, consistent feature for the model to learn from, and it means nothing.
+    """
+    height, width = canvas.shape[:2]
+    xi, yi = int(round(x)), int(round(y))
+    x0, x1 = max(0, xi - radius), min(width, xi + radius + 1)
+    y0, y1 = max(0, yi - radius), min(height, yi + radius + 1)
+    if x0 >= x1 or y0 >= y1:  # entirely outside the frame
+        return
+    canvas[y0:y1, x0:x1] = (255, 255, 255)
+
+
 DEFAULT_POSE_MODEL = Path("/data/aviad/models/mediapipe/pose_landmarker_full.task")
 POSE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
@@ -122,8 +144,7 @@ def render_skeletons(frames: np.ndarray, min_visibility: float = 0.5, model_path
             for a, b in SKELETON:
                 for i in (a, b):
                     if points[i][2] >= min_visibility:
-                        x, y = int(points[i][0]), int(points[i][1])
-                        out[index][max(0, y - 3) : y + 4, max(0, x - 3) : x + 4] = (255, 255, 255)
+                        draw_point(out[index], points[i][0], points[i][1])
     finally:
         # mediapipe 1.0's destructor can raise during interpreter teardown.
         try:
