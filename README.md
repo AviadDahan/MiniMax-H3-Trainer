@@ -201,9 +201,19 @@ reference rows are inputs that never enter the loss. All four fail silently when
 
 ## 🕺 IC-LoRA: structural control
 
-H3 ships no ControlNet and no pose, depth or edge input. IC-LoRA is how you add one: render the
-control signal as a video, pack it into the sequence as an in-context reference, and train an adapter
-to follow it. **Nothing else public trains this on H3.**
+H3 ships no ControlNet and no pose, depth or edge branch. What it does ship is `ref2va`, which packs
+an in-context reference into the sequence — and that mechanism already transfers motion from a
+skeleton on its own, without any adapter. IC-LoRA does not add structural control to a model that
+lacks it; it **tightens** control the base model already has, and makes it survive prompts that
+describe no scene. Measured, on a held-out skeleton at 448x768 with the same prompt and seed:
+
+| | mean joint distance from the reference pose |
+|---|---|
+| unrelated dance (what ignoring the reference scores) | 0.1425 |
+| base H3, no adapter | 0.0272 |
+| with the adapter | 0.0177 |
+
+**Nothing else public trains this on H3.**
 
 Trained on 92 skeleton/footage pairs at 320x576x124, rank 32. The reference below is a **held-out**
 clip that was never encoded, so following it cannot be memorization:
@@ -215,15 +225,21 @@ clip that was never encoded, so following it cannot be memorization:
 <sub>Top: the held-out skeleton. Bottom: generated from it at 576x1024. The adapter trained at
 320x576, so the control transfers to resolutions it never saw.</sub>
 
-**The control.** Give the *base* model the same skeleton and the same seed with
-no adapter, and it reproduces the skeleton rather than generating anything from it. The adapter is
-what converts a reference from something to copy into something to obey:
+**The control, and its limits.** Give the *base* model the same skeleton and the same seed with no
+adapter, and it reproduces the skeleton rather than generating anything from it:
 
 <p align="center">
   <img src="docs/demo/iclora_control_576x1024.png" alt="base reproduces the skeleton, adapter generates a person following it" width="640">
 </p>
 
 <sub>Left: base model, same reference and seed. Right: with the adapter.</sub>
+
+That comparison uses the training caption — *"a person dancing, full body in frame, following the
+motion of the reference skeleton"* — which describes no scene, and **the result does not generalize
+past that**. Re-run later with a prompt that does describe a scene, the base model renders the scene
+and follows the skeleton at 0.0272 against a 0.1425 chance floor. It only copies the reference when
+the prompt gives it nothing else to draw. So the figure above shows a real failure mode of the base
+model, not proof that the base model cannot follow a skeleton; read it as the narrow claim it is.
 
 Held-out video loss 0.5079 → 0.2607 by step 150, with the largest gain at high sigma, where the
 reference carries most of the usable signal.
@@ -249,7 +265,7 @@ What has actually been measured on this hardware, not claims:
 | VAE round-trip (video) | 22.8 dB PSNR on a hard synthetic pattern; colour, geometry and motion intact |
 | VAE round-trip (audio) | dominant frequency preserved (439.5 Hz), 0.82 waveform correlation |
 | Overfit test (numerics proof) | video loss −25% to −77% within matched sigma bins over 150 steps; sigma-controlled trend −0.673 |
-| IC-LoRA, skeleton control | 92 pairs, 320x576: generations follow a **held-out** skeleton, while the base model given the same reference reproduces it instead. Held-out loss 0.5079 → 0.2607 by step 150 |
+| IC-LoRA, skeleton control | 92 pairs, 320x576: generations follow a **held-out** skeleton; held-out loss 0.5079 → 0.2607 by step 150. A later run at 448x768 measured the adapter against the base on an identical prompt and seed: mean joint distance 0.0177 with the adapter, 0.0272 without, 0.1425 for an unrelated dance. The base model follows a skeleton on its own; the adapter tightens it by ~35% |
 | ComfyUI export | bit-exact against the PEFT weights (max abs difference 0.000e+00) |
 | Character LoRA | 36 clips, rank 16, 1200 steps: identity holds across unseen scenes, control prompts unchanged; see [Demo](#-demo) |
 | Unit tests | 52 passing, `ruff` clean |

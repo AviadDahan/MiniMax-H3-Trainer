@@ -1,17 +1,39 @@
 # =============================================================================
-# Skeleton-conditioned IC-LoRA -- structural control that H3 does not ship with
+# Skeleton-conditioned IC-LoRA -- tightening structural control H3 already has
 # =============================================================================
 #
-# H3 has no ControlNet, no pose input, no depth or edge branch. IC-LoRA is how
-# you add one: a rendered skeleton video is packed into the sequence as an
-# in-context reference,
+# READ THIS FIRST, because the obvious motivation for this config is wrong. H3
+# has no ControlNet, no pose input, no depth or edge branch -- but it does have
+# `ref2va`, and packing a rendered skeleton in as an in-context reference,
 #
 #     [ text | skeleton reference rows | target audio | target video ]
 #
-# and the adapter learns that the target should follow it. Reference rows attend
-# in both directions, sit at their pinned conditioning timestep, and carry no
-# loss -- so nothing here trains the model to reproduce skeletons, only to obey
-# them.
+# already makes the base model follow that skeleton. No adapter needed. Measured
+# on a held-out skeleton at 448x768, same prompt and seed, as mean per-joint
+# distance from the reference pose:
+#
+#     unrelated dance (i.e. ignoring the reference)   0.1425
+#     base H3, no adapter                             0.0272
+#     with this adapter at step 450                   0.0177
+#
+# So the honest claim is a ~35% tightening, not the arrival of a capability. Two
+# things did come out of the adapter that the base model does not do:
+#
+#   * With a prompt that describes no scene -- the training caption below is one
+#     -- the base model draws the SKELETON, coloured bones on black, and no human
+#     at all (0% body detection). The adapter renders a person regardless of how
+#     terse the prompt is.
+#   * It shifts appearance as well as pose at a fixed seed, so it is not a purely
+#     structural edit.
+#
+# Reference rows attend in both directions, sit at their pinned conditioning
+# timestep, and carry no loss -- so nothing here trains the model to reproduce
+# skeletons, only to obey them.
+#
+# This config is kept as the worked IC-LoRA example: the mechanism is general
+# (identity, style or structural references), and this is the path with the most
+# moving parts. The pose adapter it produced was not published -- a 35% tightening
+# over a capability the base model already has did not justify shipping weights.
 #
 # Two things differ from configs/ref2va_ic_lora.yaml, and both matter:
 #
