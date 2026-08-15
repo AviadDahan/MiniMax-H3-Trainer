@@ -67,11 +67,21 @@ def _raise_timeout(signum, frame):
 
 
 class ValidationRunner:
-    def __init__(self, config: H3TrainerConfig, transformer: torch.nn.Module, device: torch.device) -> None:
+    def __init__(
+        self,
+        config: H3TrainerConfig,
+        transformer: torch.nn.Module,
+        device: torch.device,
+        output_dir: Path | str | None = None,
+    ) -> None:
         self.config = config
         self.transformer = transformer
         self.device = device
-        self.output_dir = Path(config.output_dir) / "validation"
+        # The run's own directory, not the configured root. Runs are timestamped
+        # underneath that root, so resolving against it put every run's clips in
+        # one shared folder where each overwrote the last at matching steps -- and
+        # left them somewhere `<run>/validation` did not point at.
+        self.output_dir = Path(output_dir or config.output_dir) / "validation"
         self._pipeline = None
         #: prompt embeddings + per-row tags per validation sample, filled by prepare()
         self._conditioning: list[dict] | None = None

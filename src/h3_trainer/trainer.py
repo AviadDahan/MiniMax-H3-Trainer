@@ -605,7 +605,7 @@ class H3Trainer:
         try:
             from h3_trainer.validation_runner import ValidationRunner
 
-            self._validation_runner = ValidationRunner(self.config, None, self.context.device)
+            self._validation_runner = ValidationRunner(self.config, None, self.context.device, self.output_dir)
             self._validation_runner.prepare()
         except Exception as exc:  # pragma: no cover - never block a run on this
             logger.warning("Validation media preparation failed (%s); sampling may be skipped", exc)
@@ -622,7 +622,7 @@ class H3Trainer:
             except ImportError as exc:  # pragma: no cover
                 logger.warning("Validation sampling unavailable: %s", exc)
                 return
-            runner = ValidationRunner(self.config, self._core_model(), self.context.device)
+            runner = ValidationRunner(self.config, self._core_model(), self.context.device, self.output_dir)
             self._validation_runner = runner
         # The model is only available once setup() has run, so bind it here.
         runner.transformer = self._core_model()

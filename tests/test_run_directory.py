@@ -112,3 +112,44 @@ def test_latest_failure_does_not_end_the_run(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "symlink_to", refuse)
     trainer._point_latest_at(run)  # must not raise
+
+
+def test_validation_clips_land_in_the_run_directory(tmp_path):
+    """Not in the configured root, where consecutive runs overwrite each other.
+
+    Runs are timestamped under `output_dir`, but ValidationRunner resolved its own
+    directory from the root. Every run's clips therefore collided in one shared
+    folder -- step0000150_sample0.mp4 from run N overwritten by run N+1 -- and
+    `<run>/validation` did not exist at all.
+    """
+    from types import SimpleNamespace
+
+    from h3_trainer.validation_runner import ValidationRunner
+
+    root = tmp_path / "runs" / "pose"
+    run = root / "20260815-084500"
+    config = SimpleNamespace(output_dir=str(root))
+
+    runner = ValidationRunner.__new__(ValidationRunner)
+    ValidationRunner.__init__(runner, config, None, "cpu", run)
+    assert runner.output_dir == run / "validation"
+
+    # Falling back to the root stays supported for callers with no run directory.
+    fallback = ValidationRunner.__new__(ValidationRunner)
+    ValidationRunner.__init__(fallback, config, None, "cpu")
+    assert fallback.output_dir == root / "validation"
+
+
+def test_two_runs_do_not_share_a_validation_directory(tmp_path):
+    from types import SimpleNamespace
+
+    from h3_trainer.validation_runner import ValidationRunner
+
+    root = tmp_path / "runs" / "pose"
+    config = SimpleNamespace(output_dir=str(root))
+    directories = set()
+    for stamp in ("20260814-204514", "20260815-084500"):
+        runner = ValidationRunner.__new__(ValidationRunner)
+        ValidationRunner.__init__(runner, config, None, "cpu", root / stamp)
+        directories.add(runner.output_dir)
+    assert len(directories) == 2
